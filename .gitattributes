@@ -1,0 +1,8 @@
+# Shell scripts MUST be LF. A CRLF .sh file fails on Linux with
+# "bad interpreter: /usr/bin/env bash^M", which is a confusing way to lose an hour.
+* text=auto eol=lf
+*.sh   text eol=lf
+*.py   text eol=lf
+*.md   text eol=lf
+*.txt  text eol=lf
+*.patch -text

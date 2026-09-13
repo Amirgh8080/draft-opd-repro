@@ -1,0 +1,49 @@
+diff --git a/verl/examples/on_policy_distillation_trainer/run_qwen_gsm8k.sh b/verl/examples/on_policy_distillation_trainer/run_qwen_gsm8k.sh
+index 7013681..41eb9ff 100755
+--- a/verl/examples/on_policy_distillation_trainer/run_qwen_gsm8k.sh
++++ b/verl/examples/on_policy_distillation_trainer/run_qwen_gsm8k.sh
+@@ -1,15 +1,21 @@
+ #!/usr/bin/env bash
+ unset RAY_ADDRESS
+-pkill -9 ray
+-pkill -9 python
+-sleep 1
++# [repro] The upstream script unconditionally ran `pkill -9 ray; pkill -9 python`,
++# which kills every unrelated Python process on the box. Now opt-in.
++if [ "${KILL_STALE_PROCS:-False}" = "True" ]; then
++    pkill -9 ray || true
++    pkill -9 python || true
++    sleep 1
++fi
+ export RAY_ADDRESS=local
+ set -xeuo pipefail
+ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+ 
+-GPU_STRESS_TEST_SCRIPT=${GPU_STRESS_TEST_SCRIPT-"/mnt/shared-storage-user/leihaodi/gpu_stress_test.py"}
+-RUN_GPU_STRESS_TEST_ON_EXIT=${RUN_GPU_STRESS_TEST_ON_EXIT:-True}
++# [repro] Default was a path on the authors' cluster; the EXIT trap then failed
++# on every run. Default to off.
++GPU_STRESS_TEST_SCRIPT=${GPU_STRESS_TEST_SCRIPT-""}
++RUN_GPU_STRESS_TEST_ON_EXIT=${RUN_GPU_STRESS_TEST_ON_EXIT:-False}
+ run_gpu_stress_test_on_exit() {
+     local script_exit_code=$?
+     set +e
+@@ -39,11 +45,13 @@ TRAIN_JSONL=${TRAIN_JSONL:-""} # your data path.
+ TRAIN_JSONL_FILENAME="$(basename "$TRAIN_JSONL")"
+ TRAIN_JSONL_NAME="${TRAIN_JSONL_FILENAME%.jsonl}"
+ 
++# [repro] Overridable; generate these with `python repro/make_val_jsonl.py`.
++# Any data.val_files=[...] override on the command line still wins over this.
+ TEST_JSONLS=(
+-    "/mnt/shared-storage-user/leihaodi/opd/data/aime24_user_prompt.jsonl"
+-    "/mnt/shared-storage-user/leihaodi/opd/data/gsm8k_128_user_prompt.jsonl"
+-    "/mnt/shared-storage-user/leihaodi/opd/data/math500_128_user_prompt.jsonl"
+-    "/mnt/shared-storage-user/leihaodi/opd/data/mbpp_128_user_prompt.jsonl"
++    "${VAL_AIME24:-${REPO_ROOT}/../repro/data/aime24_30_user_prompt.jsonl}"
++    "${VAL_GSM8K:-${REPO_ROOT}/../repro/data/gsm8k_128_user_prompt.jsonl}"
++    "${VAL_MATH500:-${REPO_ROOT}/../repro/data/math500_128_user_prompt.jsonl}"
++    "${VAL_MBPP:-${REPO_ROOT}/../repro/data/mbpp_128_user_prompt.jsonl}"
+ )
+ 
+ STUDENT_MODEL="Qwen3-4B-dflash"

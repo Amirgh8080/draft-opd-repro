@@ -1,0 +1,11 @@
+# Runtime state and logs from the bootstrap pipeline
+repro/.state/
+repro/logs/
+repro/eval/logs/
+
+# Generated validation / training subsets (rebuild with make_val_jsonl.py)
+repro/data/*.jsonl
+
+# Python
+__pycache__/
+*.py[cod]

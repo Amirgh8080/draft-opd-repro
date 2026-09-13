@@ -1,0 +1,18 @@
+# Pip constraints for the Draft-OPD stack.
+#
+# Purpose: stop any later `pip install` from silently moving a pinned package.
+# The danger is real here -- sgl-kernel 0.3.21 and flashinfer 0.6.4 are compiled
+# against a specific torch ABI, and verl's dependency set (tensordict, torchdata)
+# can otherwise drag torch to a different version and break them at import time.
+#
+# numpy: sglang's stack expects numpy 2.x, but verl's setup.py pins numpy<2.0.0.
+# Installing verl normally downgrades numpy and breaks every extension compiled
+# against the numpy 2 ABI. We constrain numpy>=2 and install verl with --no-deps
+# so its pin cannot win. verl works correctly with numpy 2 in practice.
+torch==2.9.1
+torchaudio==2.9.1
+transformers==4.57.1
+sgl-kernel==0.3.21
+flashinfer_python==0.6.4
+flashinfer_cubin==0.6.4
+numpy>=2.0,<3
