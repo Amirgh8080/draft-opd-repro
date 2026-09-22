@@ -165,6 +165,43 @@ system_deps() {
 }
 
 # ---------------------------------------------------------------------------
+# 1b. Git safe.directory.
+#     setuptools_scm shells out to git during the editable build of sglang --
+#     both to resolve a version AND through its git-backed file finder, which
+#     runs even when SETUPTOOLS_SCM_PRETEND_VERSION_FOR_SGLANG is set. If the
+#     repo sits on a mount whose owner differs from the current user (a
+#     secondary /mnt partition, or a clone made by root), git aborts with
+#     "detected dubious ownership", the build exits 1, and pip reports only a
+#     generic "Failed to build ... when getting requirements to build editable".
+# ---------------------------------------------------------------------------
+git_safe() {
+  if ! command -v git >/dev/null; then
+    warn "git not found; skipping safe.directory check"
+    return 0
+  fi
+  if git -C "$REPO_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+    ok "git can read $REPO_ROOT"
+    return 0
+  fi
+
+  warn "git refuses to read $REPO_ROOT (almost certainly 'dubious ownership')"
+  log "  repo owner: $(stat -c '%U:%G' "$REPO_ROOT" 2>/dev/null || echo unknown) | running as: $(id -un):$(id -gn)"
+  if ! git config --global --add safe.directory "$REPO_ROOT"; then
+    die "could not add safe.directory. Run manually:
+    git config --global --add safe.directory $REPO_ROOT"
+  fi
+
+  if git -C "$REPO_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+    ok "added $REPO_ROOT to git safe.directory"
+  else
+    die "git still cannot read $REPO_ROOT after adding safe.directory.
+    Check the mount: a noexec/nosuid or non-POSIX filesystem (NTFS, exFAT) can
+    also break git introspection. Moving the clone onto an ext4 path is the
+    reliable fix."
+  fi
+}
+
+# ---------------------------------------------------------------------------
 # 2. Conda environment
 # ---------------------------------------------------------------------------
 make_env() {
@@ -194,6 +231,10 @@ install_sglang() {
       -> retry with PY_VERSION=3.12 (or 3.11) and a fresh --env-name
     * network timeout on a multi-GB wheel -> just re-run, pip resumes downloads
     * missing nvcc/build tools for a source build -> re-run the system_deps stage
+    * 'detected dubious ownership' in the build output -> the repo is on a mount
+      git will not touch. Fix:
+          git config --global --add safe.directory $REPO_ROOT
+      then re-run. (The git_safe stage normally does this for you.)
     See $RUN_LOG"
 
   PIP cachetools || die "cachetools install failed"
@@ -386,6 +427,7 @@ main() {
   if (( SKIP_INSTALL == 0 )); then
     stage preflight   preflight
     stage system_deps system_deps
+    stage git_safe    git_safe
     stage make_env    make_env
     stage sglang      install_sglang
     stage verl        install_verl

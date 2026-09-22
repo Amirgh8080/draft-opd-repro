@@ -131,6 +131,14 @@ actor dir after conversion. Use `repro/05_extract_draft.sh` instead.
 
 ## Known friction
 
+- **Git `safe.directory`.** If the clone sits on a mount whose owner differs
+  from the running user (a secondary `/mnt` partition, or a clone made by root),
+  git aborts with `detected dubious ownership`. `setuptools_scm` shells out to
+  git during the sglang editable build -- via its file finder, which runs even
+  with `SETUPTOOLS_SCM_PRETEND_VERSION_FOR_SGLANG` set -- so the build dies with
+  only a generic pip message. The `git_safe` stage detects and fixes this:
+  `git config --global --add safe.directory <repo>`.
+  *Confirmed on an RTX 4090 box, 2026-09-20.*
 - **Offline mode.** `sglang_run_bench.sh` forces `HF_HUB_OFFLINE=1` and
   `HF_DATASETS_OFFLINE=1`. Anything not prefetched fails with a confusing error.
   Run `01_prefetch_assets.sh` first.

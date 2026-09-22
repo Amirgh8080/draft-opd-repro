@@ -5,7 +5,8 @@ Speculative Draft Models** ([arXiv:2605.29343](https://arxiv.org/abs/2605.29343)
 Lei et al., 2026).
 
 The paper's training recipe assumes 8× H200. This repo makes the work runnable
-on **one RTX 3090 (24 GB, SM86)**: a staged bootstrap that survives the stack's
+on **a single 24 GB consumer GPU** (RTX 3090 / 4090, SM86 / SM89): a staged
+bootstrap that survives the stack's
 dependency hazards, the validation data the upstream repo does not ship, a
 single-GPU training configuration, and a sequential evaluation driver.
 
@@ -74,8 +75,13 @@ Four ways the stack installs *successfully* but wrong:
    torch; `sgl-kernel 0.3.21` is ABI-bound to 2.9.1. Pinned and asserted.
 4. **torchcodec has no FFmpeg.** A hard sglang dependency on linux-x86_64 that
    fails at *import*, not install. The `system_deps` stage installs it.
+5. **Git `safe.directory`.** If the clone sits on a mount whose owner differs
+   from the running user, git aborts with `detected dubious ownership`.
+   `setuptools_scm` shells out to git during the sglang build — via its file
+   finder, which runs even with the pretend version set — so the build dies
+   with only a generic pip message. The `git_safe` stage detects and fixes it.
 
-## Reproducibility on a 3090
+## Reproducibility on a consumer GPU
 
 Judge replication on **acceptance length τ**, not on speedup ratios.
 
@@ -85,7 +91,8 @@ hardware-independent, so the paper's Qwen3-4B result (DFlash τ = 6.04 →
 Draft-OPD τ = 6.60, non-thinking, temperature 0) is exactly reproducible here.
 
 The speedup multipliers are not. They depend on the memory-bandwidth-to-compute
-ratio (3090 ≈ 936 GB/s vs H200 ≈ 4.8 TB/s), so absolute × values will differ.
+ratio (3090 ≈ 936 GB/s, 4090 ≈ 1008 GB/s, vs H200 ≈ 4.8 TB/s), so absolute ×
+values will differ.
 Report them as measured on your hardware.
 
 **Training at paper scale is not feasible on one GPU.** The paper's recipe is
@@ -97,11 +104,15 @@ length.
 
 ## Status
 
-The scripts are syntax-validated and the bootstrap's control flow, argument
-parsing, logging and preflight guard have been exercised. The install stages
-themselves have not yet been run end-to-end on target hardware. Expect the first
-real run to surface something — most likely wheel availability for
-`sgl-kernel 0.3.21` or `flashinfer 0.6.4` on your Python version.
+Run on an **RTX 4090** (SM89, 24 GB, driver 595, Ubuntu noble) on 2026-09-20.
+
+Confirmed working: preflight and GPU detection, the SM89 backend branch,
+`system_deps` (ffmpeg, libnuma, ninja, git-lfs), and conda env creation
+(python 3.12.14).
+
+That run surfaced one real bug — git `safe.directory` on a `/mnt` clone breaking
+the sglang editable build — now fixed by the `git_safe` stage. The stages after
+it (`sglang`, `verl`, `verify`, training) have not yet completed end-to-end.
 
 ## Credit
 
