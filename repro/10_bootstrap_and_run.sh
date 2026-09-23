@@ -212,10 +212,42 @@ make_env() {
     conda create -n "$ENV_NAME" "python=$PY_VERSION" -y || die "conda create failed"
     ok "env '$ENV_NAME' created (python $PY_VERSION)"
   fi
-  conda activate "$ENV_NAME"
+}
+
+# activate_env MUST run on every invocation, never behind a stage marker.
+#
+# This used to live inside make_env(). On a resumed run make_env was skipped
+# ("already complete") and the activation went with it, so `python` silently
+# fell back to conda's BASE interpreter and everything installed against the
+# wrong Python. Because outlines==0.1.11 pins outlines_core==0.1.26, which
+# ships no cp313 wheel, pip then fell back to a source build and died on
+# "can't find Rust compiler" -- a symptom, not the cause.
+activate_env() {
+  eval "$(conda shell.bash hook)"
+  conda activate "$ENV_NAME" || die "could not activate env '$ENV_NAME'.
+    Create it first by running without --skip-install."
+
+  local py_path py_ver env_prefix
+  py_path=$(command -v python) || die "no python on PATH after activating '$ENV_NAME'"
+  py_ver=$(python -c "import sys; print('%d.%d' % sys.version_info[:2])")
+  env_prefix="${CONDA_PREFIX:-}"
+
+  if [[ -z "$env_prefix" || "$py_path" != "$env_prefix"/* ]]; then
+    die "activated '$ENV_NAME' but python resolves outside it.
+    python      : $py_path
+    CONDA_PREFIX: ${env_prefix:-<unset>}
+    Installing here would pollute the base environment. Aborting."
+  fi
+  if [[ "$py_ver" != "$PY_VERSION" ]]; then
+    die "env '$ENV_NAME' has python $py_ver, expected $PY_VERSION.
+    A mismatched interpreter breaks pinned wheels: outlines_core 0.1.26 has no
+    cp313 wheel and falls back to a Rust source build.
+    Fix: conda env remove -n $ENV_NAME  (then rerun), or pass --env-name <new>."
+  fi
+
   python -m pip install -q --upgrade pip setuptools wheel "setuptools-scm>=8" packaging \
-    || die "could not upgrade base build tooling"
-  ok "python $(python -V 2>&1 | awk '{print $2}'), pip $(python -m pip -V | awk '{print $2}')"
+    || die "could not upgrade build tooling inside '$ENV_NAME'"
+  ok "env '$ENV_NAME' active: python $(python -V 2>&1 | awk '{print $2}') at $py_path"
 }
 
 # ---------------------------------------------------------------------------
@@ -228,9 +260,15 @@ install_sglang() {
 
   PIP -e "./sglang-dflash/python" || die "sglang-dflash install failed. Usual causes:
     * no wheel of sgl-kernel 0.3.21 / flashinfer 0.6.4 for python $PY_VERSION
-      -> retry with PY_VERSION=3.12 (or 3.11) and a fresh --env-name
+      -> unlikely on 3.12: all 21 pins were verified to have cp312 linux wheels.
+         If you changed PY_VERSION, change it back to 3.12.
     * network timeout on a multi-GB wheel -> just re-run, pip resumes downloads
     * missing nvcc/build tools for a source build -> re-run the system_deps stage
+    * a 'can-t find Rust compiler' error -> you are on the WRONG python.
+      Check wheel tags in the log above: cp313 means conda base, not '$ENV_NAME'.
+      outlines_core 0.1.26 ships no cp313 wheel and falls back to a Rust source
+      build. activate_env asserts against this now; if it still happens, run
+      conda activate $ENV_NAME then python -V, and expect $PY_VERSION.
     * 'detected dubious ownership' in the build output -> the repo is on a mount
       git will not touch. Fix:
           git config --global --add safe.directory $REPO_ROOT
@@ -429,14 +467,14 @@ main() {
     stage system_deps system_deps
     stage git_safe    git_safe
     stage make_env    make_env
+    activate_env      # NEVER stage-gated: a resumed run must still activate
     stage sglang      install_sglang
     stage verl        install_verl
     stage flash_attn  install_flash_attn
     stage verify      verify
   else
     log "--skip-install: activating existing env '$ENV_NAME'"
-    eval "$(conda shell.bash hook)"
-    conda activate "$ENV_NAME" || die "env '$ENV_NAME' not found; run without --skip-install"
+    activate_env
   fi
 
   if (( TRAIN_ONLY == 0 )); then

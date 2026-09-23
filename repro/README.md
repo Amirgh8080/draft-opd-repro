@@ -131,6 +131,15 @@ actor dir after conversion. Use `repro/05_extract_draft.sh` instead.
 
 ## Known friction
 
+- **Resumed runs and the wrong Python.** Environment activation must never sit
+  behind a stage marker. It originally lived inside `make_env`, so a resumed run
+  skipped the activation along with the stage and installed into conda's *base*
+  interpreter. The tell is cp313 wheel tags in the log when the env is 3.12, and
+  the visible error is `can't find Rust compiler` — `outlines==0.1.11` pins
+  `outlines_core==0.1.26`, which has cp39–cp312 wheels but no cp313, so pip
+  falls back to a Rust source build. `activate_env` now runs unconditionally and
+  asserts both the interpreter path and its version.
+  *Confirmed on an RTX 4090 box, 2026-09-23.*
 - **Git `safe.directory`.** If the clone sits on a mount whose owner differs
   from the running user (a secondary `/mnt` partition, or a clone made by root),
   git aborts with `detected dubious ownership`. `setuptools_scm` shells out to

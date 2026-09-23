@@ -59,7 +59,7 @@ Three fixes to `verl/examples/on_policy_distillation_trainer/run_qwen_gsm8k.sh`:
 
 ## Install hazards this handles
 
-Four ways the stack installs *successfully* but wrong:
+Six ways the stack installs *successfully* but wrong:
 
 1. **setuptools-scm cannot version the sglang fork.** Its `pyproject.toml` sets
    `root = ".."` (no `.git` there) and greps for `v*.*.*` tags the clone lacks,
@@ -80,6 +80,13 @@ Four ways the stack installs *successfully* but wrong:
    `setuptools_scm` shells out to git during the sglang build — via its file
    finder, which runs even with the pretend version set — so the build dies
    with only a generic pip message. The `git_safe` stage detects and fixes it.
+6. **Resumed runs installing into the wrong Python.** Env activation must not
+   sit behind a stage marker. It originally lived inside `make_env`, so a
+   resumed run skipped activation with the stage and installed into conda's
+   *base* interpreter. Tell: cp313 wheel tags when the env is 3.12; visible
+   error: `can't find Rust compiler`, because `outlines_core==0.1.26` has no
+   cp313 wheel. `activate_env` now runs unconditionally and asserts the
+   interpreter path and version.
 
 ## Reproducibility on a consumer GPU
 
@@ -110,9 +117,19 @@ Confirmed working: preflight and GPU detection, the SM89 backend branch,
 `system_deps` (ffmpeg, libnuma, ninja, git-lfs), and conda env creation
 (python 3.12.14).
 
-That run surfaced one real bug — git `safe.directory` on a `/mnt` clone breaking
-the sglang editable build — now fixed by the `git_safe` stage. The stages after
-it (`sglang`, `verl`, `verify`, training) have not yet completed end-to-end.
+Two real bugs surfaced and are fixed:
+
+1. Git `safe.directory` on a `/mnt` clone broke the sglang editable build
+   (`git_safe` stage).
+2. Env activation sat behind a stage marker, so resumed runs installed into
+   conda's base Python 3.13 instead of the 3.12 env (`activate_env`, now
+   unconditional and asserted).
+
+All 21 pinned dependencies were verified against PyPI to have cp312 Linux
+wheels, so nothing needs to compile from source on Python 3.12.
+
+The stages after `sglang` (`verl`, `verify`, training) have not yet completed
+end-to-end.
 
 ## Credit
 
