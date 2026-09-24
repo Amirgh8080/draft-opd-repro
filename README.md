@@ -59,7 +59,7 @@ Three fixes to `verl/examples/on_policy_distillation_trainer/run_qwen_gsm8k.sh`:
 
 ## Install hazards this handles
 
-Seven ways the stack installs *successfully* but wrong:
+Eight ways the stack installs *successfully* but wrong:
 
 1. **setuptools-scm cannot version the sglang fork.** Its `pyproject.toml` sets
    `root = ".."` (no `.git` there) and greps for `v*.*.*` tags the clone lacks,
@@ -86,7 +86,12 @@ Seven ways the stack installs *successfully* but wrong:
    `04_train_1gpu.sh` auto-detects and falls back to `sdpa` +
    `use_remove_padding=False` (equivalent, slower). No prebuilt wheel exists for
    torch 2.9 + cu12, so the fast path needs a CUDA toolkit.
-7. **Resumed runs installing into the wrong Python.** Env activation must not
+7. **fp32 model init OOMs a 24 GB card.** verl builds the training module in
+   fp32 by default, so the frozen Qwen3-4B target alone wants ~17 GiB. The
+   trainer sets `model_dtype=bf16` (~8 GiB) and lowers the rollout engine's
+   `mem_fraction_static` to 0.35. This is a **deviation from the paper**, which
+   trained in fp32 on 141 GB H200s — state it when writing up results.
+8. **Resumed runs installing into the wrong Python.** Env activation must not
    sit behind a stage marker. It originally lived inside `make_env`, so a
    resumed run skipped activation with the stage and installed into conda's
    *base* interpreter. Tell: cp313 wheel tags when the env is 3.12; visible
@@ -119,25 +124,26 @@ length.
 
 Run on an **RTX 4090** (SM89, 24 GB, driver 595, Ubuntu noble), 2026-09-24.
 
-**The full install now completes.** Verified in-env: torch 2.9.1+cu128,
-numpy 2.5.3 (not downgraded), transformers 4.57.1, sglang 0.5.8, flashinfer,
-sgl_kernel, torchcodec, ray 2.58.0, tensordict 0.10.0, flex_attention, and the
-DFlash speculative worker all import. Assets download, and the four validation
-JSONLs generate.
+**The full install completes and the pipeline reaches model construction.**
+Verified in-env: torch 2.9.1+cu128, numpy 2.5.3 (not downgraded),
+transformers 4.57.1, sglang 0.5.8, flashinfer, sgl_kernel, torchcodec,
+ray 2.58.0, tensordict 0.10.0, flex_attention, and the DFlash speculative
+worker all import. Assets download and the four validation JSONLs generate.
 
-Three bugs surfaced and are fixed:
+Four bugs surfaced and are fixed:
 
-1. Git `safe.directory` on a `/mnt` clone broke the sglang editable build
-   (`git_safe` stage).
+1. Git `safe.directory` on a `/mnt` clone broke the sglang editable build.
 2. Env activation sat behind a stage marker, so resumed runs installed into
-   conda's base Python 3.13 instead of the 3.12 env (`activate_env`).
+   conda's base Python 3.13 instead of the 3.12 env.
 3. The trainer needed flash-attn for the frozen target model; it now
    auto-selects `sdpa` + `use_remove_padding=False` when flash_attn is absent.
+4. fp32 model init OOMed on 24 GB; now bf16 with a lower rollout memory
+   fraction.
 
 All 21 pinned dependencies were verified against PyPI to have cp312 Linux
 wheels, so nothing compiles from source on Python 3.12.
 
-Training itself has not yet completed a step.
+A training step has not yet completed.
 
 ## Credit
 

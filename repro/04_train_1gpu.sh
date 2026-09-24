@@ -89,6 +89,23 @@ fi
 
 VAL_FILES="['$REPO_ROOT/repro/data/aime24_30_user_prompt.jsonl','$REPO_ROOT/repro/data/gsm8k_128_user_prompt.jsonl','$REPO_ROOT/repro/data/math500_128_user_prompt.jsonl','$REPO_ROOT/repro/data/mbpp_128_user_prompt.jsonl']"
 
+# ----------------------------------------------------------- model dtype --
+# verl builds the training module in fp32 by default
+# (trainer/config/engine/fsdp.yaml:33, transformer_impl.py:_build_module:
+# 'if it is training, we force torch_dtype to fp32'). For the composed DFlash
+# student that means the FROZEN Qwen3-4B target alone wants 4B x 4 bytes =
+# ~17 GiB, which cannot coexist with the SGLang rollout engine on 24 GB:
+#   torch.OutOfMemoryError: Tried to allocate 16.99 GiB ... 4.89 GiB is free
+#
+# bf16 halves that to ~8 GiB. The paper trained on H200s (141 GB) where fp32
+# was free; on a 24 GB card it is not an option. Note this as a deviation from
+# the paper's precision when writing up results.
+MODEL_DTYPE=${MODEL_DTYPE:-bf16}
+
+# The allocator hint is what the OOM message itself recommends; it reduces
+# fragmentation when large blocks are allocated and freed repeatedly.
+export PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}
+
 cat <<INFO
 
 ================================================================================
@@ -98,6 +115,7 @@ cat <<INFO
    draft  (trained)   : $DRAFT_MODEL_PATH
    teacher            : composed_main (no separate teacher GPU)
    anchor stride      : $ANCHOR_STRIDE  (1 = every draft block, as in the paper)
+   model dtype        : $MODEL_DTYPE  (paper used fp32 on H200; bf16 required here)
    checkpoints        : verl/checkpoints/verl-dflash-opd/
 ================================================================================
 
@@ -141,10 +159,19 @@ else
 fi
 
 # ------------------------------------------------------------------ launch --
-# Memory knobs for 24 GB, in the order to relax them if you OOM:
-#   1. lower TEACHER_GPU_MEMORY_UTILIZATION (rollout engine weights + KV)
+# Memory budget on 24 GB, roughly:
+#   frozen Qwen3-4B (bf16)      ~8.0 GiB
+#   DFlash drafter   (bf16)     ~1.0 GiB
+#   SGLang engine @ 0.35        ~8.2 GiB   (released during training steps)
+#   ------------------------------------
+#   leaves ~6 GiB for grads, activations and KV.
+#
+# If you still OOM, relax in this order:
+#   1. lower TEACHER_GPU_MEMORY_UTILIZATION (0.35 -> 0.25): rollout weights + KV
 #   2. lower RESP_LEN
 #   3. raise ANCHOR_STRIDE (fewer replay positions per sample)
+# Already applied: bf16 weights, gradient checkpointing, FSDP param + optimizer
+# offload, micro-batch 1, expandable_segments allocator.
 MAIN_MODEL_PATH="$MAIN_MODEL_PATH" \
 DRAFT_MODEL_PATH="$DRAFT_MODEL_PATH" \
 TRAIN_JSONL="$TRAIN_JSONL" \
@@ -157,7 +184,7 @@ PPO_MICRO_BATCH_SIZE_PER_GPU=1 \
 MAX_PROMPT=512 \
 MAX_RESPONSE_LENGTH="$RESP_LEN" \
 ENABLE_THINKING=${ENABLE_THINKING:-False} \
-TEACHER_GPU_MEMORY_UTILIZATION=${TEACHER_GPU_MEMORY_UTILIZATION:-0.55} \
+TEACHER_GPU_MEMORY_UTILIZATION=${TEACHER_GPU_MEMORY_UTILIZATION:-0.35} \
 REJECTED_DRAFT_POSITION_DECAY=0.8 \
 TEST_FREQ=${TEST_FREQ:-50} \
 SAVE_FREQ=${SAVE_FREQ:-100} \
@@ -172,4 +199,5 @@ bash verl/examples/on_policy_distillation_trainer/run_qwen_gsm8k_forward-ins.sh 
   trainer.resume_mode=${RESUME_MODE:-auto} \
   ++actor_rollout_ref.model.override_config.attn_implementation="$attn_impl" \
   actor_rollout_ref.model.use_remove_padding="$remove_padding" \
+  actor_rollout_ref.actor.fsdp_config.model_dtype="$MODEL_DTYPE" \
   "$@"

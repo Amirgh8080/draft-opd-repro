@@ -131,6 +131,16 @@ actor dir after conversion. Use `repro/05_extract_draft.sh` instead.
 
 ## Known friction
 
+- **fp32 model init OOMs a 24 GB card.** verl builds the training module in fp32
+  by default (`trainer/config/engine/fsdp.yaml:33`; `_build_module` comments "if
+  it is training, we force torch_dtype to fp32"). For the composed DFlash
+  student the *frozen* Qwen3-4B target alone then wants 4B x 4 bytes ~ 17 GiB:
+  `torch.OutOfMemoryError: Tried to allocate 16.99 GiB ... 4.89 GiB is free`.
+  `04_train_1gpu.sh` sets `actor_rollout_ref.actor.fsdp_config.model_dtype=bf16`
+  (~8 GiB) and drops the rollout engine's `mem_fraction_static` to 0.35.
+  **This is a deviation from the paper**, which trained in fp32 on 141 GB H200s.
+  Worth stating explicitly in a write-up. Override with `MODEL_DTYPE=`.
+  *Confirmed on an RTX 4090 box, 2026-09-24.*
 - **flash-attn is not optional for the fast path.** `flex_attention` covers only
   the DRAFT module's block-mask attention. The frozen TARGET model inside the
   composed student is loaded by transformers with `flash_attention_2` by default
@@ -187,10 +197,15 @@ actor dir after conversion. Use `repro/05_extract_draft.sh` instead.
 
 If training OOMs, relax in this order:
 
-1. `TEACHER_GPU_MEMORY_UTILIZATION` (default 0.55) — rollout engine weights + KV
+1. `TEACHER_GPU_MEMORY_UTILIZATION` (default 0.35) — rollout engine weights + KV
 2. `RESP_LEN_OVERRIDE` — shorter responses
 3. `ANCHOR_STRIDE_OVERRIDE` — fewer replay positions per sample (costs fidelity
    to the paper, which uses stride 1)
 
-Already on by default in the launcher: gradient checkpointing, FSDP param
-offload, FSDP optimizer offload, micro-batch 1.
+Already on by default in the launcher: bf16 weights, gradient checkpointing,
+FSDP param offload, FSDP optimizer offload, micro-batch 1, and the
+`expandable_segments` CUDA allocator.
+
+Rough budget on 24 GB: frozen Qwen3-4B bf16 ~8.0 GiB + drafter ~1.0 GiB +
+SGLang engine at 0.35 ~8.2 GiB, leaving ~6 GiB for gradients, activations and
+KV.
