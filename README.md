@@ -59,7 +59,7 @@ Three fixes to `verl/examples/on_policy_distillation_trainer/run_qwen_gsm8k.sh`:
 
 ## Install hazards this handles
 
-Six ways the stack installs *successfully* but wrong:
+Seven ways the stack installs *successfully* but wrong:
 
 1. **setuptools-scm cannot version the sglang fork.** Its `pyproject.toml` sets
    `root = ".."` (no `.git` there) and greps for `v*.*.*` tags the clone lacks,
@@ -80,7 +80,13 @@ Six ways the stack installs *successfully* but wrong:
    `setuptools_scm` shells out to git during the sglang build — via its file
    finder, which runs even with the pretend version set — so the build dies
    with only a generic pip message. The `git_safe` stage detects and fixes it.
-6. **Resumed runs installing into the wrong Python.** Env activation must not
+6. **flash-attn is not actually optional.** `flex_attention` covers only the
+   DRAFT module. The frozen TARGET model is loaded with `flash_attention_2` by
+   default, and verl's unpadded path imports `flash_attn.bert_padding`.
+   `04_train_1gpu.sh` auto-detects and falls back to `sdpa` +
+   `use_remove_padding=False` (equivalent, slower). No prebuilt wheel exists for
+   torch 2.9 + cu12, so the fast path needs a CUDA toolkit.
+7. **Resumed runs installing into the wrong Python.** Env activation must not
    sit behind a stage marker. It originally lived inside `make_env`, so a
    resumed run skipped activation with the stage and installed into conda's
    *base* interpreter. Tell: cp313 wheel tags when the env is 3.12; visible
@@ -111,25 +117,27 @@ length.
 
 ## Status
 
-Run on an **RTX 4090** (SM89, 24 GB, driver 595, Ubuntu noble) on 2026-09-20.
+Run on an **RTX 4090** (SM89, 24 GB, driver 595, Ubuntu noble), 2026-09-24.
 
-Confirmed working: preflight and GPU detection, the SM89 backend branch,
-`system_deps` (ffmpeg, libnuma, ninja, git-lfs), and conda env creation
-(python 3.12.14).
+**The full install now completes.** Verified in-env: torch 2.9.1+cu128,
+numpy 2.5.3 (not downgraded), transformers 4.57.1, sglang 0.5.8, flashinfer,
+sgl_kernel, torchcodec, ray 2.58.0, tensordict 0.10.0, flex_attention, and the
+DFlash speculative worker all import. Assets download, and the four validation
+JSONLs generate.
 
-Two real bugs surfaced and are fixed:
+Three bugs surfaced and are fixed:
 
 1. Git `safe.directory` on a `/mnt` clone broke the sglang editable build
    (`git_safe` stage).
 2. Env activation sat behind a stage marker, so resumed runs installed into
-   conda's base Python 3.13 instead of the 3.12 env (`activate_env`, now
-   unconditional and asserted).
+   conda's base Python 3.13 instead of the 3.12 env (`activate_env`).
+3. The trainer needed flash-attn for the frozen target model; it now
+   auto-selects `sdpa` + `use_remove_padding=False` when flash_attn is absent.
 
 All 21 pinned dependencies were verified against PyPI to have cp312 Linux
-wheels, so nothing needs to compile from source on Python 3.12.
+wheels, so nothing compiles from source on Python 3.12.
 
-The stages after `sglang` (`verl`, `verify`, training) have not yet completed
-end-to-end.
+Training itself has not yet completed a step.
 
 ## Credit
 

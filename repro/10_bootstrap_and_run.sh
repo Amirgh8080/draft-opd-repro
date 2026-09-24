@@ -338,12 +338,22 @@ install_verl() {
 }
 
 # ---------------------------------------------------------------------------
-# 5. flash-attn (optional). The DFlash student uses torch flex_attention, so
-#    this is not required. Long build, never fatal.
+# 5. flash-attn (optional, but it does matter).
+#    flex_attention covers only the DRAFT module's block-mask attention. The
+#    frozen TARGET model inside the composed student is loaded by transformers
+#    with flash_attention_2 by default, and verl's unpadded path imports
+#    flash_attn.bert_padding. Without flash_attn, 04_train_1gpu.sh falls back to
+#    sdpa + use_remove_padding=False -- correct, just slower.
+#    No prebuilt wheel exists for torch 2.9 + cu12 (upstream ships cu13torch2.9
+#    only), so this builds from source and needs a CUDA toolkit. Never fatal.
 # ---------------------------------------------------------------------------
 install_flash_attn() {
   if (( WITH_FLASH_ATTN == 0 )); then
-    ok "skipping flash-attn -- not needed, the DFlash student uses flex_attention (--with-flash-attn to build it anyway)"
+    ok "skipping flash-attn. 04_train_1gpu.sh then auto-selects sdpa + padded"
+    ok "  batches -- correct, just slower. flex_attention covers only the DRAFT"
+    ok "  module; the frozen TARGET model would use flash_attn if it were present."
+    ok "  Fast path needs a CUDA toolkit (no prebuilt wheel for torch 2.9 + cu12),"
+    ok "  then rerun with --with-flash-attn."
     return 0
   fi
   warn "building flash-attn from source: 30-90 min, >16 GB RAM"

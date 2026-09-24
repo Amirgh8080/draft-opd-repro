@@ -103,6 +103,43 @@ cat <<INFO
 
 INFO
 
+# ------------------------------------------------- attention implementation --
+# verl defaults the main (frozen target) model to flash_attention_2
+# (workers/config/model.py:186). build_composed_dflash_student passes that
+# config straight to AutoModelForCausalLM, so without flash_attn the run dies
+# at model load with 'FlashAttention2 has been toggled on, but ... flash_attn
+# ... not installed'.
+#
+# flex_attention covers only the DRAFT module's block-mask attention, not the
+# target model -- so flash-attn genuinely matters here.
+#
+# Two flags must move together. attn_implementation=sdpa fixes the model load,
+# but use_remove_padding=True makes the engine take its unpadded path
+# (transformer_impl.py:1735/2041/2215), which imports flash_attn.bert_padding
+# and fails just as hard at the first forward.
+#
+# There is no prebuilt flash-attn wheel for torch 2.9 + cu12 (upstream ships
+# cu13torch2.9 only), so building it needs a full CUDA toolkit. Auto-detect:
+# fast path when flash_attn imports, else sdpa + padded batches. Numerically
+# equivalent, just slower.
+if [[ -n "${ATTN_IMPL:-}" ]]; then
+  attn_impl="$ATTN_IMPL"
+elif python -c "import flash_attn" 2>/dev/null; then
+  attn_impl="flash_attention_2"
+else
+  attn_impl="sdpa"
+fi
+
+if [[ "$attn_impl" == "flash_attention_2" ]]; then
+  remove_padding=True
+  echo "  attention: flash_attention_2 (flash_attn present; sequence packing on)"
+else
+  remove_padding=False
+  echo "  attention: $attn_impl (flash_attn absent; sequence packing disabled)"
+  echo "             Slower but numerically equivalent. For the fast path, install"
+  echo "             a CUDA toolkit and rerun the bootstrap with --with-flash-attn."
+fi
+
 # ------------------------------------------------------------------ launch --
 # Memory knobs for 24 GB, in the order to relax them if you OOM:
 #   1. lower TEACHER_GPU_MEMORY_UTILIZATION (rollout engine weights + KV)
@@ -133,4 +170,6 @@ bash verl/examples/on_policy_distillation_trainer/run_qwen_gsm8k_forward-ins.sh 
   actor_rollout_ref.actor.fsdp_config.optimizer_offload=True \
   ++actor_rollout_ref.model.override_config.verl_dflash_response_anchor_stride="$ANCHOR_STRIDE" \
   trainer.resume_mode=${RESUME_MODE:-auto} \
+  ++actor_rollout_ref.model.override_config.attn_implementation="$attn_impl" \
+  actor_rollout_ref.model.use_remove_padding="$remove_padding" \
   "$@"

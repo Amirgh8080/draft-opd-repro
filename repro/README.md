@@ -131,6 +131,17 @@ actor dir after conversion. Use `repro/05_extract_draft.sh` instead.
 
 ## Known friction
 
+- **flash-attn is not optional for the fast path.** `flex_attention` covers only
+  the DRAFT module's block-mask attention. The frozen TARGET model inside the
+  composed student is loaded by transformers with `flash_attention_2` by default
+  (`verl/workers/config/model.py:186`), and verl's unpadded path imports
+  `flash_attn.bert_padding` (`transformer_impl.py:1735/2041/2215`). Without
+  flash_attn both fail. `04_train_1gpu.sh` auto-detects and falls back to
+  `attn_implementation=sdpa` + `use_remove_padding=False` — numerically
+  equivalent, just slower. Override with `ATTN_IMPL=`. There is no prebuilt
+  flash-attn wheel for torch 2.9 + cu12 (upstream ships cu13torch2.9 only), so
+  the fast path needs a CUDA toolkit and `--with-flash-attn`.
+  *Confirmed on an RTX 4090 box, 2026-09-24.*
 - **Resumed runs and the wrong Python.** Environment activation must never sit
   behind a stage marker. It originally lived inside `make_env`, so a resumed run
   skipped the activation along with the stage and installed into conda's *base*
