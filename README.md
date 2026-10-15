@@ -13,6 +13,18 @@ single-GPU training configuration, and a sequential evaluation driver.
 This repo contains **only** the replication harness. It does not redistribute
 the upstream code — you clone that yourself, then apply a patch.
 
+**Two harnesses live here:**
+
+| Directory | Hardware | Recipe |
+|---|---|---|
+| [`h200/`](h200/README.md) | 1× H200, in a container | **The paper's recipe, unreduced**: fp32, 16K prompts × 8 epochs, 4096 tokens, anchor stride 1, fa3. Use this to replicate the paper's numbers. |
+| `repro/` (below) | 1× 24 GB consumer GPU | Scaled down to fit: bf16 init, offload, fewer prompts and tokens |
+
+For the H200 path: `docker build -f h200/Dockerfile -t draft-opd-h200 .`, or
+start a pod from `lmsysorg/sglang:v0.5.8-cu129-amd64` and run
+`bash h200/run_all.sh`. See [`h200/README.md`](h200/README.md). The rest of
+this page covers the 24 GB harness.
+
 ## What is here
 
 | Path | Purpose |
@@ -26,7 +38,8 @@ the upstream code — you clone that yourself, then apply a patch.
 | `repro/05_extract_draft.sh` | FSDP checkpoint → loadable drafter |
 | `repro/make_val_jsonl.py` | Builds the 4 validation JSONLs the trainer needs |
 | `repro/constraints.txt` | Pins torch/numpy/transformers against silent drift |
-| `patches/001-launcher-fixes.patch` | Three fixes to the upstream training launcher |
+| `patches/001-launcher-fixes.patch` | Three fixes to the upstream training launcher (used by both harnesses) |
+| `h200/` | Paper-faithful single-H200 container harness — see its README |
 
 `repro/README.md` has the detailed guide: replication targets, memory tuning
 order, and the full list of known friction points.

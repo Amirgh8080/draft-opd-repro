@@ -1,0 +1,15 @@
+# Pins for the Draft-OPD stack on H200 (SM90, CUDA 12.9).
+#
+# sgl-kernel 0.3.21 and flashinfer 0.6.4 are compiled against torch 2.9.1;
+# tensordict / torchdata can otherwise drag torch elsewhere. `torch==2.9.1`
+# also matches the base image's local build 2.9.1+cu129.
+#
+# numpy: verl's setup.py says numpy<2, the sglang stack is built for numpy 2.
+# verl is installed with --no-deps so its pin cannot downgrade numpy.
+torch==2.9.1
+torchaudio==2.9.1
+transformers==4.57.1
+sgl-kernel==0.3.21
+flashinfer_python==0.6.4
+flashinfer_cubin==0.6.4
+numpy>=2.0,<3

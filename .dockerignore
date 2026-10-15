@@ -1,0 +1,6 @@
+.git
+**/__pycache__
+repro/.state
+repro/logs
+repro/eval/logs
+repro/data/*.jsonl
