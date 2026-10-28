@@ -245,7 +245,24 @@ so `nvidia-smi` can no longer switch the card back. Recover like this:
 
    A `Problem` code (for example 43, 10 or 31) confirms that the driver
    refused to start.
-2. **Download the driver version that worked before**, the one `nvidia-smi`
+2. **Try the fast reset first; it needs no download.** Remove the device but
+   **keep** its driver, then let Windows re-add it. The device's settings,
+   including the driver model, are recreated from the driver's defaults (TCC
+   for datacenter cards), using the driver already on disk:
+
+   **PowerShell** (as Administrator)
+   ```powershell
+   $id = (Get-PnpDevice | Where-Object FriendlyName -like "*NVIDIA*").InstanceId
+   pnputil /remove-device "$id"
+   pnputil /scan-devices
+   Restart-Computer
+   ```
+
+   Do **not** add `/delete-driver` or tick *Delete the driver software*. After
+   the reboot, check with `nvidia-smi` as in step 5. If the card is back in
+   TCC, you are done. Otherwise continue with step 2b.
+
+2b. **Download the driver version that worked before**, the one `nvidia-smi`
    showed while the card was in TCC. Get it from nvidia.com/drivers (*Data
    Center / Tesla* → *H-Series* → *H200 NVL* → your Windows version). The
    same version is the safe choice: newer branches may drop your Windows
