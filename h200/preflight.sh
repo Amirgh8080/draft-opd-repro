@@ -42,6 +42,20 @@ free=$(df -BG --output=avail "$WORKSPACE" | tail -1 | tr -dc '0-9')
 # version compatibility then runs it on any R550+ driver.
 (( ${drv%%.*} >= 550 )) && ok "driver $drv" || bad "driver $drv < 550"
 
+# WSL2 (Windows host). /proc/version shows the host kernel inside containers too.
+if grep -qi microsoft /proc/version 2>/dev/null; then
+  warn "WSL2 detected: tau is comparable to the paper, speedups through GPU paravirtualisation may not be"
+  # A Windows drive (/mnt/c, or a Docker Desktop bind of one) is slow and breaks
+  # Linux permissions and git ownership checks.
+  case "$(stat -f -c %T "$WORKSPACE" 2>/dev/null)" in
+    v9fs|9p|drvfs|fuse*|smb*|cifs)
+      bad "$WORKSPACE is on a Windows drive; keep it on the Linux filesystem (see h200/GUIDE_WINDOWS.md, Route 2 step 6)" ;;
+  esac
+  case "$(realpath "$H200_DIR")" in
+    /mnt/[a-z]/*) bad "the repo is under $(realpath "$H200_DIR"); clone it inside the Linux filesystem instead" ;;
+  esac
+fi
+
 # GPU-bound imports cannot be checked at image build time; check them here.
 if python "$H200_DIR/check_imports.py" >/tmp/h200_imports.log 2>&1; then
   ok "python stack imports (sgl_kernel, DFlash worker, flash_attn, verl)"

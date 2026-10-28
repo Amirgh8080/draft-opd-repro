@@ -16,6 +16,10 @@ Pick the path that matches your machine:
   Vast.ai, and similar). There is no Docker to install. Start at
   [B1](#b1-create-the-pod).
 
+**On Windows?** Read [`GUIDE_WINDOWS.md`](GUIDE_WINDOWS.md) first. It covers
+controlling a Linux H200 from Windows over SSH, and running under WSL2 when
+the GPU is in a Windows machine.
+
 Both paths meet at [Step 5](#step-5-phase-1--evaluate-the-released-checkpoints).
 
 ---
