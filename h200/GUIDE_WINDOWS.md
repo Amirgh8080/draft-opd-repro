@@ -174,7 +174,22 @@ GPU reaches it through Windows' GPU paravirtualisation:
   ways that do not reproduce on Linux, run Phase 2 on a Linux machine. The
   checkpoints are portable.
 
-### 1. Check the Windows driver and its mode
+### 1. Check the Windows version, the driver and its mode
+
+**Check the Windows version first.** For a datacenter card, Route 2 needs the
+latest Windows 11 or Windows Server 2025. On **Windows 10** (any version) or
+Windows Server 2022, switching to MCDM leaves the driver unable to start: the
+card shows *Code 43* and `nvidia-smi` stops working. Do not switch on those
+versions. Use Route 1, or install Linux on the machine.
+
+**PowerShell**
+```powershell
+Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' | Select ProductName, DisplayVersion, CurrentBuild
+```
+
+A build number of 26100 or higher means Windows 11 24H2+ or Server 2025.
+19045 is Windows 10 22H2. (`ProductName` can still say "Windows 10" on
+Windows 11, so go by the build number.)
 
 **PowerShell** (as Administrator)
 ```powershell
@@ -230,18 +245,37 @@ so `nvidia-smi` can no longer switch the card back. Recover like this:
 
    A `Problem` code (for example 43, 10 or 31) confirms that the driver
    refused to start.
-2. **Clean-reinstall the newest NVIDIA data center driver for Windows.**
-   Download it from nvidia.com/drivers (*Data Center / Tesla*, *H-Series*,
-   *H200 NVL*, your Windows version). In the installer, choose *Custom* →
-   *Perform a clean installation*, then reboot. A newer driver may support MCDM
-   on this card. If it does not, the reinstall is also the way back to TCC.
-3. If the device is still broken, open **Device Manager**. Right-click the
-   NVIDIA device (under *Display adapters*, *Compute accelerators* or *Other
-   devices*) → *Uninstall device*, and tick *Attempt to remove the driver for
-   this device*. Reboot, then install the driver again as in step 2.
-4. Check with `nvidia-smi`. If it shows the card in TCC again and MCDM keeps
-   failing, Route 2 is closed on this machine. Install Ubuntu on it and follow
-   [`GUIDE.md`](GUIDE.md) Path A.
+2. **Download the driver version that worked before**, the one `nvidia-smi`
+   showed while the card was in TCC. Get it from nvidia.com/drivers (*Data
+   Center / Tesla* → *H-Series* → *H200 NVL* → your Windows version). The
+   same version is the safe choice: newer branches may drop your Windows
+   version (R595 lists only Windows 11 24H2/25H2). Download it *before* step 3.
+3. **Remove the device together with its driver.** The driver-model setting
+   is stored with the installed device, so deleting the device is what resets
+   it. Open **Device Manager** (`devmgmt.msc`) and find *NVIDIA H200 NVL*, which
+   has a yellow warning sign. It may be under *Display adapters*, *Compute
+   accelerators* or *Other devices*. Right-click it → *Uninstall device*, tick
+   *Delete the driver software for this device* (Windows 11: *Attempt to
+   remove the driver for this device*), then *Uninstall*. **Reboot.**
+4. **Install the driver from step 2**: *Custom (Advanced)* → tick *Perform a
+   clean installation*, then reboot.
+5. **Check:**
+
+   **PowerShell** (as Administrator)
+   ```powershell
+   nvidia-smi
+   nvidia-smi -q | Select-String "Driver Model" -Context 0,2
+   ```
+
+   It should list the card again, with `Current: TCC`. If it still shows
+   Code 43 or no card, repeat step 3. If Windows reinstalled a driver on its
+   own after the reboot in step 3, delete the device and driver once more, so
+   the clean install in step 4 starts from scratch.
+
+On Windows 10, Route 2 ends here. Use Route 1, install Ubuntu on the machine
+and follow [`GUIDE.md`](GUIDE.md) Path A, or upgrade to Windows 11 24H2+ and
+try again with a current driver. That last option is still unofficial for the
+H200 (see above).
 
 If MCDM is refused on your Windows version, stop here: install Linux on the
 machine, or use Route 1.
@@ -401,7 +435,7 @@ to the paper. It also flags a workspace that sits on a Windows drive.
 | `ssh: connect to host ... Connection timed out` | Wrong `HostName` or `Port` in `.ssh\config`, or the provider's firewall blocks it. Pods often use a non-22 port. |
 | `Permission denied (publickey)` | The key was not added to the provider before the machine was created, or `IdentityFile` points to the wrong file. |
 | WSL `nvidia-smi`: `No devices were found` | GPU still in TCC mode, or outdated Windows driver: switch to MCDM (Route 2, step 1). |
-| After switching to MCDM and rebooting, `nvidia-smi` says it *couldn't communicate with the NVIDIA driver* | The driver did not start in MCDM. Clean-reinstall the newest data center driver (Route 2, step 1, "If the driver does not start after the switch"). |
+| After switching to MCDM and rebooting, `nvidia-smi` says it *couldn't communicate with the NVIDIA driver*; Device Manager shows Code 43 | The driver cannot start in MCDM, which always happens on Windows 10 and Server 2022. Delete the device with its driver, then reinstall the previously working driver (Route 2, step 1, "If the driver does not start after the switch"). |
 | `nvidia-smi -dm 0` changes nothing; `Pending` stays TCC | Datacenter cards cannot use WDDM. Use `-dm 2` (MCDM) in an Administrator PowerShell (Route 2, step 1). |
 | `docker: Error response from daemon: could not select device driver "" with capabilities: [[gpu]]` | NVIDIA Container Toolkit not installed or not configured: redo GUIDE.md A2's toolkit block, then `sudo service docker restart`. |
 | `unsatisfied condition: cuda>=12.9` | Windows driver older than R575: add `-e NVIDIA_DISABLE_REQUIRE=1` to `OPD_FLAGS` (GUIDE.md A6), or update the driver. |
