@@ -260,7 +260,8 @@ so `nvidia-smi` can no longer switch the card back. Recover like this:
 
    Do **not** add `/delete-driver` or tick *Delete the driver software*. After
    the reboot, check with `nvidia-smi` as in step 5. If the card is back in
-   TCC, you are done. Otherwise continue with step 2b.
+   TCC, you are done. This
+   restored TCC on an H200 NVL under Windows 10 22H2 with driver 581.80. Otherwise continue with step 2b.
 
 2b. **Download the driver version that worked before**, the one `nvidia-smi`
    showed while the card was in TCC. Get it from nvidia.com/drivers (*Data
