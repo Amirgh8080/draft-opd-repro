@@ -156,6 +156,13 @@ GPU reaches it through Windows' GPU paravirtualisation:
   Windows 11 or Windows Server 2025. Step 1 switches the card. If MCDM is
   refused on your machine, Route 2 is not possible there; install Linux on it,
   or use Route 1.
+
+  **For H100/H200 specifically, prefer installing Linux on the machine.**
+  NVIDIA's data center driver release notes (R550, R570) list Windows support
+  for the H200 only in shared NVSwitch virtualization configurations. A
+  standalone Windows box with an H200 is outside that, and on at least one H200
+  NVL the driver failed to start after the MCDM switch. Recovery is below
+  under "If the driver does not start after the switch".
 - **Speedups.** τ (acceptance length) is a property of the models and prompts,
   so it is still comparable to the paper. The speedups go through the
   virtualisation layer, so they may not match the paper's bare-metal Linux
@@ -200,7 +207,41 @@ After the reboot, `Current` should say MCDM. Two problems are known:
 - On Windows Server 2022, the card can show a yellow warning in Device Manager
   after the switch. Windows Server 2025 or the latest Windows 11 is the
   reported fix.
-- To undo the switch, run `nvidia-smi -i 0 -dm 1` (TCC) and reboot.
+- To undo the switch, run `nvidia-smi -i 0 -dm 1` (TCC) and reboot. This only
+  works while `nvidia-smi` can still reach the driver; see the next section if
+  it cannot.
+
+#### If the driver does not start after the switch
+
+Symptom: after the reboot, every `nvidia-smi` command prints *"couldn't
+communicate with the NVIDIA driver"*. The driver failed to load in MCDM mode,
+so `nvidia-smi` can no longer switch the card back. Recover like this:
+
+1. Check the device state:
+
+   **PowerShell** (as Administrator)
+   ```powershell
+   Get-PnpDevice | Where-Object FriendlyName -like "*NVIDIA*" |
+     ForEach-Object { [pscustomobject]@{
+       Status = $_.Status; Class = $_.Class; Name = $_.FriendlyName
+       Problem = (Get-PnpDeviceProperty -InstanceId $_.InstanceId -KeyName DEVPKEY_Device_ProblemCode).Data } } |
+     Format-Table -AutoSize
+   ```
+
+   A `Problem` code (for example 43, 10 or 31) confirms that the driver
+   refused to start.
+2. **Clean-reinstall the newest NVIDIA data center driver for Windows.**
+   Download it from nvidia.com/drivers (*Data Center / Tesla*, *H-Series*,
+   *H200 NVL*, your Windows version). In the installer, choose *Custom* →
+   *Perform a clean installation*, then reboot. A newer driver may support MCDM
+   on this card. If it does not, the reinstall is also the way back to TCC.
+3. If the device is still broken, open **Device Manager**. Right-click the
+   NVIDIA device (under *Display adapters*, *Compute accelerators* or *Other
+   devices*) → *Uninstall device*, and tick *Attempt to remove the driver for
+   this device*. Reboot, then install the driver again as in step 2.
+4. Check with `nvidia-smi`. If it shows the card in TCC again and MCDM keeps
+   failing, Route 2 is closed on this machine. Install Ubuntu on it and follow
+   [`GUIDE.md`](GUIDE.md) Path A.
 
 If MCDM is refused on your Windows version, stop here: install Linux on the
 machine, or use Route 1.
@@ -360,6 +401,7 @@ to the paper. It also flags a workspace that sits on a Windows drive.
 | `ssh: connect to host ... Connection timed out` | Wrong `HostName` or `Port` in `.ssh\config`, or the provider's firewall blocks it. Pods often use a non-22 port. |
 | `Permission denied (publickey)` | The key was not added to the provider before the machine was created, or `IdentityFile` points to the wrong file. |
 | WSL `nvidia-smi`: `No devices were found` | GPU still in TCC mode, or outdated Windows driver: switch to MCDM (Route 2, step 1). |
+| After switching to MCDM and rebooting, `nvidia-smi` says it *couldn't communicate with the NVIDIA driver* | The driver did not start in MCDM. Clean-reinstall the newest data center driver (Route 2, step 1, "If the driver does not start after the switch"). |
 | `nvidia-smi -dm 0` changes nothing; `Pending` stays TCC | Datacenter cards cannot use WDDM. Use `-dm 2` (MCDM) in an Administrator PowerShell (Route 2, step 1). |
 | `docker: Error response from daemon: could not select device driver "" with capabilities: [[gpu]]` | NVIDIA Container Toolkit not installed or not configured: redo GUIDE.md A2's toolkit block, then `sudo service docker restart`. |
 | `unsatisfied condition: cuda>=12.9` | Windows driver older than R575: add `-e NVIDIA_DISABLE_REQUIRE=1` to `OPD_FLAGS` (GUIDE.md A6), or update the driver. |
