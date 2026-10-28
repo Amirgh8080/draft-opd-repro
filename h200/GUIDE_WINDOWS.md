@@ -148,11 +148,14 @@ from GUIDE.md Step 9 inside an Ubuntu window.
 Read this first. Route 2 runs Linux inside a lightweight VM (WSL2), and the
 GPU reaches it through Windows' GPU paravirtualisation:
 
-- **Datacenter GPUs and WSL.** WSL only sees GPUs whose Windows driver runs in
-  **WDDM** mode. Datacenter cards (H100, H200) usually ship in **TCC** mode,
-  and WSL cannot see a GPU in TCC mode. Step 1 checks this. If your card
-  cannot switch to WDDM, Route 2 is not possible on that machine; use Route 1
-  with a Linux machine instead.
+- **Datacenter GPUs and WSL.** WSL cannot see a GPU whose Windows driver runs
+  in **TCC** mode, and datacenter cards (H100, H200, H200 NVL) ship in TCC.
+  These cards have no display engine, so they cannot use **WDDM**, the mode
+  for desktop cards. Their route into WSL2 is **MCDM**, a compute-only driver
+  model. MCDM needs a recent driver (R570+) and a recent Windows: the latest
+  Windows 11 or Windows Server 2025. Step 1 switches the card. If MCDM is
+  refused on your machine, Route 2 is not possible there; install Linux on it,
+  or use Route 1.
 - **Speedups.** τ (acceptance length) is a property of the models and prompts,
   so it is still comparable to the paper. The speedups go through the
   virtualisation layer, so they may not match the paper's bare-metal Linux
@@ -172,19 +175,38 @@ nvidia-smi
 nvidia-smi -q | Select-String "Driver Model" -Context 0,2
 ```
 
-`Current` must say **WDDM**. If it says **TCC**, try switching. This needs a
-reboot, and not every datacenter card supports WDDM:
+`Current` must say **MCDM** (datacenter cards) or **WDDM** (desktop cards).
+If it says **TCC**, switch a datacenter card to MCDM. Run PowerShell **as
+Administrator** for this: right-click Windows Terminal → *Run as
+administrator*. Without admin rights, the switch fails.
 
 **PowerShell** (as Administrator)
 ```powershell
-nvidia-smi -i 0 -dm 0          # 0 = WDDM
+nvidia-smi -i 0 -dm 2          # 2 = MCDM. Do not use 0 (WDDM) on a datacenter card.
+nvidia-smi -q | Select-String "Driver Model" -Context 0,2
+```
+
+Read what the first command prints. **Before you reboot, `Pending` must say
+MCDM.** If it still says TCC, the switch was refused, and rebooting will not
+help; the printed message says why. Once `Pending` says MCDM:
+
+**PowerShell** (as Administrator)
+```powershell
 Restart-Computer
 ```
 
-If the switch is refused, stop here and use Route 1.
+After the reboot, `Current` should say MCDM. Two problems are known:
 
-Use a recent NVIDIA Windows driver (R550 or newer; R575+ avoids the
-`NVIDIA_DISABLE_REQUIRE` workaround). **Never install a Linux NVIDIA driver
+- On Windows Server 2022, the card can show a yellow warning in Device Manager
+  after the switch. Windows Server 2025 or the latest Windows 11 is the
+  reported fix.
+- To undo the switch, run `nvidia-smi -i 0 -dm 1` (TCC) and reboot.
+
+If MCDM is refused on your Windows version, stop here: install Linux on the
+machine, or use Route 1.
+
+Use a recent NVIDIA Windows driver: R570 or newer for MCDM (R575+ also avoids
+the `NVIDIA_DISABLE_REQUIRE` workaround). **Never install a Linux NVIDIA driver
 inside WSL.** The Windows driver provides the GPU to WSL.
 
 ### 2. Install WSL2 with Ubuntu
@@ -252,7 +274,7 @@ nvidia-smi
 ```
 
 It should show the H200. If it says `command not found` or `No devices were
-found`, go back to step 1. The usual cause is the driver model (TCC) or an
+found`, go back to step 1. The usual cause is the driver model (still TCC) or an
 outdated Windows driver.
 
 ### 5. Install Docker inside WSL
@@ -337,7 +359,8 @@ to the paper. It also flags a workspace that sits on a Windows drive.
 | `bash\r: No such file or directory` or `$'\r': command not found` | CRLF line endings: the repo was cloned or edited on Windows. Run the `sed -i 's/\r$//'` command from Route 1, step 4, or re-clone inside Linux/WSL. |
 | `ssh: connect to host ... Connection timed out` | Wrong `HostName` or `Port` in `.ssh\config`, or the provider's firewall blocks it. Pods often use a non-22 port. |
 | `Permission denied (publickey)` | The key was not added to the provider before the machine was created, or `IdentityFile` points to the wrong file. |
-| WSL `nvidia-smi`: `No devices were found` | GPU in TCC mode or outdated Windows driver (Route 2, step 1). |
+| WSL `nvidia-smi`: `No devices were found` | GPU still in TCC mode, or outdated Windows driver: switch to MCDM (Route 2, step 1). |
+| `nvidia-smi -dm 0` changes nothing; `Pending` stays TCC | Datacenter cards cannot use WDDM. Use `-dm 2` (MCDM) in an Administrator PowerShell (Route 2, step 1). |
 | `docker: Error response from daemon: could not select device driver "" with capabilities: [[gpu]]` | NVIDIA Container Toolkit not installed or not configured: redo GUIDE.md A2's toolkit block, then `sudo service docker restart`. |
 | `unsatisfied condition: cuda>=12.9` | Windows driver older than R575: add `-e NVIDIA_DISABLE_REQUIRE=1` to `OPD_FLAGS` (GUIDE.md A6), or update the driver. |
 | The run stops overnight | Windows slept or installed updates (Route 2, step 7), or the Ubuntu window was closed. On Route 1 this does not happen: the run lives on the remote machine. |
