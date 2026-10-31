@@ -58,7 +58,7 @@ PIP cachetools
 # for its own (older) flashinfer, and flashinfer refuses to import on a version
 # mismatch. Match the cache to 0.6.4, or drop it (kernels then JIT-compile on
 # first use, which needs nvcc -- present in this image).
-jit=$("$PY" -m pip show flashinfer-jit-cache 2>/dev/null | awk '/^Version:/ {print $2}')
+jit=$("$PY" -m pip show flashinfer-jit-cache 2>/dev/null | awk '/^Version:/ {print $2}' || true)   # absent on bare metal: not an error
 if [[ -n "$jit" && "$jit" != 0.6.4* ]]; then
   echo "flashinfer-jit-cache $jit != 0.6.4; replacing"
   "$PY" -m pip install --no-deps "flashinfer-jit-cache==0.6.4" \
