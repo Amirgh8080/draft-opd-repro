@@ -7,6 +7,13 @@
 H200_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HARNESS_ROOT="$(cd "${H200_DIR}/.." && pwd)"
 
+# Machine-local settings written by setup_bare_metal.sh (WORKSPACE, H200_VENV,
+# CUDA_HOME). Absent in the Docker image and on pods; git- and docker-ignored.
+if [[ -f "$H200_DIR/.local.env" ]]; then
+  # shellcheck disable=SC1091
+  source "$H200_DIR/.local.env"
+fi
+
 # Upstream code, pinned. The paper's numbers were produced by this codebase; a
 # later commit may change defaults under you, so do not float on main.
 UPSTREAM_URL=${UPSTREAM_URL:-https://github.com/Simplified-Reasoning/Draft-OPD.git}
@@ -36,6 +43,17 @@ TARGET_ID=${TARGET_ID:-Qwen/Qwen3-4B}
 DFLASH_ID=${DFLASH_ID:-z-lab/Qwen3-4B-DFlash-b16}
 OPD_INS_ID=${OPD_INS_ID:-bingyang-lei/Qwen3-4B-Ins-Draft-OPD}
 OPD_THINK_ID=${OPD_THINK_ID:-bingyang-lei/Qwen3-4B-Thinking-Draft-OPD}
+
+# Bare-metal installs (no Docker): use the Python 3.12 venv and the CUDA 12
+# toolkit that setup_bare_metal.sh prepared, so every script and the upstream
+# launcher (`python3 -m verl...`) resolve to them without manual activation.
+if [[ -n "${H200_VENV:-}" && "${VIRTUAL_ENV:-}" != "$H200_VENV" && -f "$H200_VENV/bin/activate" ]]; then
+  # shellcheck disable=SC1091
+  source "$H200_VENV/bin/activate"
+fi
+if [[ -n "${CUDA_HOME:-}" && -x "$CUDA_HOME/bin/nvcc" ]]; then
+  export CUDA_HOME PATH="$CUDA_HOME/bin:$PATH"
+fi
 
 mkdir -p "$WORKSPACE" "$DATA_DIR" "$CKPT_ROOT" "$LOG_ROOT" "$STATE_DIR" "$HF_HOME" 2>/dev/null || true
 

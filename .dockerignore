@@ -4,3 +4,4 @@ repro/.state
 repro/logs
 repro/eval/logs
 repro/data/*.jsonl
+h200/.local.env

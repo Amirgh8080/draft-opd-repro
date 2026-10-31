@@ -22,7 +22,8 @@ the upstream code — you clone that yourself, then apply a patch.
 
 For the H200 path: `docker build -f h200/Dockerfile -t draft-opd-h200 .`, or
 start a pod from `lmsysorg/sglang:v0.5.8-cu129-amd64` and run
-`bash h200/run_all.sh`. On a fresh machine, follow the step-by-step
+`bash h200/run_all.sh`. Without Docker, run
+`bash h200/setup_bare_metal.sh --workspace /data/workspace` first. On a fresh machine, follow the step-by-step
 [`h200/GUIDE.md`](h200/GUIDE.md) (Windows: [`h200/GUIDE_WINDOWS.md`](h200/GUIDE_WINDOWS.md)); details are in [`h200/README.md`](h200/README.md). The rest of
 this page covers the 24 GB harness.
 

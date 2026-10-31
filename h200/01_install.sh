@@ -21,7 +21,23 @@ PIP() { "$PY" -m pip install --retries 5 --timeout 120 -c "$CONSTRAINTS" "$@"; }
   echo "ERROR: $UPSTREAM_DIR is not a Draft-OPD clone. Run h200/00_get_upstream.sh first." >&2; exit 1; }
 
 pyver=$("$PY" -c 'import sys; print("%d.%d" % sys.version_info[:2])')
-[[ "$pyver" == "3.12" ]] || echo "WARN: python $pyver; this recipe is verified on 3.12 only." >&2
+if [[ "$pyver" != "3.12" ]]; then
+  # Not just untested: outlines_core 0.1.26 has no cp313 wheel and falls back to
+  # a Rust source build; other pins have no wheels for older Pythons.
+  echo "ERROR: $("$PY" -c 'import sys; print(sys.executable)') is Python $pyver; the pinned stack needs 3.12." >&2
+  echo "       On a machine without the SGLang image, run h200/setup_bare_metal.sh first." >&2
+  exit 1
+fi
+
+# Installing into a bare distro Python would scatter a few GB of packages into
+# the OS interpreter. Allowed only where torch is already there (the SGLang image
+# or a pod built from it); otherwise use the venv setup_bare_metal.sh creates.
+is_system=$("$PY" -c 'import sys; print(int(sys.prefix == sys.base_prefix))')
+if [[ "$is_system" == 1 && -z "${CONDA_PREFIX:-}" ]] && ! "$PY" -c "import torch" 2>/dev/null; then
+  echo "ERROR: $PY is the system interpreter and has no torch: this is not the SGLang image." >&2
+  echo "       For a plain Linux machine, run: bash h200/setup_bare_metal.sh --workspace /path/on/big/disk" >&2
+  exit 1
+fi
 
 echo "=== system libraries ==============================================="
 # torchcodec (hard sglang dependency) fails at import, not install, without FFmpeg.
@@ -77,9 +93,12 @@ if "$PY" -c "import flash_attn" 2>/dev/null; then
 elif [[ "${SKIP_FLASH_ATTN:-0}" == "1" ]]; then
   echo "WARN: SKIP_FLASH_ATTN=1 -- training will use sdpa + padded batches (not the paper's path)."
 else
+  # --no-build-isolation: the build tools must already be in this environment.
+  PIP setuptools wheel packaging ninja psutil
   command -v nvcc >/dev/null || {
     echo "ERROR: nvcc not found, cannot build flash-attn. Use a CUDA *devel* image" >&2
-    echo "       (lmsysorg/sglang:v0.5.8-cu129-amd64 is one), or SKIP_FLASH_ATTN=1." >&2
+    echo "       (lmsysorg/sglang:v0.5.8-cu129-amd64 is one), run h200/setup_bare_metal.sh" >&2
+    echo "       on a plain machine, or set SKIP_FLASH_ATTN=1." >&2
     exit 1; }
   # Building only for sm90 cuts the compile from ~1-2 h to ~15-30 min.
   FLASH_ATTN_CUDA_ARCHS=90 MAX_JOBS=${MAX_JOBS:-8} \

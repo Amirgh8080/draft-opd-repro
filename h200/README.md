@@ -60,6 +60,23 @@ bash h200/run_all.sh --train-only
 Upstream is cloned into `/workspace/Draft-OPD`, so it persists across pod
 restarts.
 
+### C. Linux without Docker (bare metal or a VM)
+
+Ubuntu 22.04/24.04, `sudo`, and an installed NVIDIA driver:
+
+```bash
+git clone https://github.com/Amirgh8080/draft-opd-repro.git && cd draft-opd-repro
+bash h200/setup_bare_metal.sh --workspace /data/workspace   # CUDA 12.8 toolkit + Python 3.12 venv + install
+bash h200/run_all.sh --eval-only
+bash h200/run_all.sh --train-only
+```
+
+The setup leaves the driver and the system Python untouched. It saves the
+workspace and environment in `h200/.local.env`, so the other scripts need no
+activation. torch is PyPI's 2.9.1 (CUDA 12.8 build), the one the fork's
+`pyproject.toml` selects on x86_64; the images ship the cu129 build of the same
+version.
+
 ### Requirements
 
 - 1× H200 (SM90, 141 GB). `preflight.sh` fails below 139 GB of VRAM, and warns
@@ -204,6 +221,7 @@ Upstream's README says `TEACHER_GPU_MEMORY_UTILIZATION` defaults to 0.1. The
 | `GUIDE_WINDOWS.md` | Windows: SSH control of a Linux H200, or WSL2 on a Windows GPU host |
 | `Dockerfile` | `lmsysorg/sglang:v0.5.8-cu129-amd64` + pinned upstream + install |
 | `run_all.sh` | preflight → code → install → assets → eval → train → extract → eval |
+| `setup_bare_metal.sh` | No-Docker setup: system packages, CUDA 12.8 toolkit, Python 3.12 venv, install |
 | `preflight.sh` | GPU / shm / RAM / disk / driver checks, plus the GPU-bound import check |
 | `check_imports.py` | Fails on version drift (torch, numpy, shadowed sglang) or a missing extension |
 | `00_get_upstream.sh` | clone at the pinned commit, apply the launcher patch |

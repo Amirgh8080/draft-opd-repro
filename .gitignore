@@ -9,3 +9,6 @@ repro/data/*.jsonl
 # Python
 __pycache__/
 *.py[cod]
+
+# Machine-local settings from h200/setup_bare_metal.sh
+h200/.local.env

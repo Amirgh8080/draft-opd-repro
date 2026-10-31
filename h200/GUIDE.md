@@ -15,12 +15,16 @@ Pick the path that matches your machine:
 - **Path B: a GPU cloud "pod" where you choose a container image** (RunPod,
   Vast.ai, and similar). There is no Docker to install. Start at
   [B1](#b1-create-the-pod).
+- **Path C: a Linux machine where you won't use Docker** (bare metal, or a VM
+  without Docker). A setup script installs a CUDA toolkit and a Python 3.12
+  environment, and leaves the NVIDIA driver and the system Python alone.
+  Start at [C1](#c1-check-the-gpu-driver-and-disk).
 
 **On Windows?** Read [`GUIDE_WINDOWS.md`](GUIDE_WINDOWS.md) first. It covers
 controlling a Linux H200 from Windows over SSH, and running under WSL2 when
 the GPU is in a Windows machine.
 
-Both paths meet at [Step 5](#step-5-phase-1--evaluate-the-released-checkpoints).
+All paths meet at [Step 5](#step-5-phase-1--evaluate-the-released-checkpoints).
 
 ---
 
@@ -205,6 +209,80 @@ Everything else stays on `/workspace`.
 
 ---
 
+## Path C: Linux without Docker
+
+Use this on a machine you control (bare metal, or a VM) when you don't want
+Docker. Requirements: Ubuntu 22.04 or 24.04 on x86_64, `sudo`, and the NVIDIA
+driver already installed. Other distributions work if you install a CUDA 12
+toolkit yourself (see C3).
+
+How it differs from the container paths: torch 2.9.1 comes from PyPI (its CUDA
+12.8 build), which is the build the fork's own `pyproject.toml` selects on
+x86_64. The images use the cu129 build of the same torch version. All the
+versions pinned in `h200/constraints.txt` are identical on every path.
+
+### C1. Check the GPU, driver and disk
+
+```bash
+nvidia-smi                 # one H200, driver >= 550 (570+ recommended)
+df -h                      # find a disk with 500 GB+ free, e.g. /data
+```
+
+The setup script never installs or changes the NVIDIA driver. If
+`nvidia-smi` is missing, install the driver your provider recommends first
+(for example `sudo ubuntu-drivers install`, then reboot).
+
+### C2. Get the code and a terminal that survives disconnects
+
+```bash
+sudo apt-get install -y tmux git
+tmux new -s opd            # reattach later with: tmux attach -t opd
+git clone https://github.com/Amirgh8080/draft-opd-repro.git
+cd draft-opd-repro
+```
+
+### C3. Run the setup (about 45–60 minutes)
+
+```bash
+bash h200/setup_bare_metal.sh --workspace /data/workspace
+```
+
+Put `--workspace` on the big disk: the Python environment, models, data,
+checkpoints and logs all go there. The script:
+
+1. checks the driver, and asks before installing system packages with `sudo`
+   (git, ffmpeg, libnuma, build tools, tmux);
+2. installs the **CUDA 12.8 toolkit** from NVIDIA's apt repository, only to
+   compile flash-attn. It skips this if a CUDA 12 `nvcc` is already present,
+   and it installs `cuda-toolkit-12-8`, which contains no driver;
+3. installs [uv](https://docs.astral.sh/uv/) in your home directory and
+   creates a **Python 3.12 environment** at `<workspace>/venv`;
+4. clones upstream Draft-OPD at the pinned commit and installs the stack into
+   that environment, compiling flash-attn for the H200 (most of the time is
+   here).
+
+It saves its choices in `h200/.local.env`. From then on, every `h200/` script
+uses that workspace and environment automatically: you don't need to activate
+anything. Re-running the script is safe. On a non-Ubuntu system, install a
+CUDA 12 toolkit first and run the script with
+`CUDA_HOME=/path/to/cuda-12.x bash h200/setup_bare_metal.sh --workspace ...`.
+
+### C4. Preflight
+
+```bash
+bash h200/preflight.sh
+```
+
+Every line should say `OK`, including the Python stack import check. Then
+continue at [Step 5](#step-5-phase-1--evaluate-the-released-checkpoints) and
+use the **Path B / C** commands. On Path C, `<workspace>` is the directory you
+passed to `--workspace`.
+
+To work in the environment by hand (for example, to run `python` yourself),
+use `source /data/workspace/venv/bin/activate`.
+
+---
+
 ## Step 5. Phase 1: evaluate the released checkpoints
 
 This single command clones upstream Draft-OPD at the pinned commit, applies the
@@ -217,7 +295,7 @@ opd -d --name opd-eval draft-opd-h200 bash h200/run_all.sh --eval-only
 docker logs -f opd-eval          # Ctrl-C stops following; the run continues
 ```
 
-**Path B:**
+**Path B / C:**
 ```bash
 bash h200/run_all.sh --eval-only
 ```
@@ -227,6 +305,7 @@ When it finishes, read the summary:
 ```bash
 cat /data/workspace/logs/eval/nothinking_temp0.0/summary.md    # Path A
 cat /workspace/logs/eval/nothinking_temp0.0/summary.md         # Path B
+cat <workspace>/logs/eval/nothinking_temp0.0/summary.md        # Path C: your --workspace
 ```
 
 **What you are checking.** In the τ column, the `dflash` and `draftopd` rows
@@ -253,7 +332,7 @@ separate `-timing` checkpoint and log directory, so the real run is unaffected:
 opd -e TIMING_PROBE=1 draft-opd-h200 bash h200/04_train_paper.sh
 ```
 
-**Path B:**
+**Path B / C:**
 ```bash
 TIMING_PROBE=1 bash h200/04_train_paper.sh
 ```
@@ -290,7 +369,7 @@ docker run -d --name opd-train --restart on-failure:3 "${OPD_FLAGS[@]}" \
 docker logs -f opd-train          # Ctrl-C stops following; training continues
 ```
 
-**Path B** (inside tmux):
+**Path B / C** (inside tmux):
 
 ```bash
 bash h200/run_all.sh --train-only
@@ -330,7 +409,8 @@ Path A or B, attach the same storage as the workspace, and run Step 7.
 `run_all.sh` evaluates the last checkpoint. To evaluate an earlier one, extract
 it and benchmark it under its own label:
 
-**Path B**, or **Path A** after you open a shell in the container with
+**Path B / C** (on Path C, use your `--workspace` instead of `/workspace`),
+or **Path A** after you open a shell in the container with
 `opd -it draft-opd-h200 bash`. Inside the container, the paths are the same
 `/workspace/...`:
 
@@ -372,7 +452,7 @@ in [`README.md`](README.md#what-does-differ-and-what-it-means-for-exact):
 
 ## Quick reference
 
-| Task | Path A (Docker host) | Path B (pod) |
+| Task | Path A (Docker host) | Path B (pod) / Path C (no Docker) |
 |---|---|---|
 | Preflight | `opd draft-opd-h200 bash h200/preflight.sh` | `bash h200/preflight.sh` |
 | Phase 1 | `opd -d --name opd-eval draft-opd-h200 bash h200/run_all.sh --eval-only` | `bash h200/run_all.sh --eval-only` |
@@ -382,4 +462,5 @@ in [`README.md`](README.md#what-does-differ-and-what-it-means-for-exact):
 | Redo a stage | delete `<workspace>/.state/<stage>.done` and rerun | same |
 
 `<workspace>` is `/data/workspace` on Path A (the host path; it is
-`/workspace` inside the container) and `/workspace` on Path B.
+`/workspace` inside the container), `/workspace` on Path B, and the
+`--workspace` directory you chose on Path C.
