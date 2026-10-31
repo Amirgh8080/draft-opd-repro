@@ -83,6 +83,8 @@ PIP accelerate codetiming dill hydra-core peft pybind11 pylatexenc \
     "ray[default]>=2.41.0" torchdata "tensordict>=0.8.0,<=0.10.0,!=0.9.0" \
     wandb tensorboard "pyarrow>=19.0.0" pandas datasets
 PIP latex2sympy2_extended math_verify || echo "WARN: math_verify failed; unused here (use_task_rewards=False)"
+echo "note: a pip line 'ERROR: ... verl ... requires numpy<2.0.0' above is expected and harmless."
+echo "      numpy 2 is kept on purpose (the sglang stack is built for it); pip only reports it."
 
 echo "=== flash-attn 2.8.3 for SM90 ======================================"
 # The upstream launcher loads the frozen Qwen3-4B with flash_attention_2 and

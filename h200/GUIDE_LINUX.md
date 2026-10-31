@@ -303,6 +303,7 @@ the system Python were never modified.
 | Setup fails downloading from `developer.download.nvidia.com` or `astral.sh` | A firewall or proxy is blocking it. Allow those hosts. Or, if a CUDA 12 toolkit is already installed elsewhere, rerun with `CUDA_HOME=/path/to/cuda-12.x`. |
 | `Ubuntu XX.YY: NVIDIA's apt repo covers 22.04/24.04` | Other distributions: install CUDA toolkit 12.x yourself, then rerun with `CUDA_HOME=/path/to/cuda-12.x`. |
 | flash-attn build is killed, or the machine freezes during the install | The compile ran out of RAM. Rerun with fewer parallel jobs: `MAX_JOBS=4 bash h200/setup_bare_metal.sh --workspace /data/workspace`. |
+| Install log shows `ERROR: ... verl ... requires numpy<2.0.0` | Expected and harmless. numpy 2 is kept on purpose; pip only reports the mismatch, and the install continues. |
 | `the pinned stack needs 3.12` | Something other than the setup's environment is being used. Check that `h200/.local.env` exists, and rerun the setup. |
 | `the system interpreter and has no torch` | You ran `h200/01_install.sh` directly on a fresh machine. Run `h200/setup_bare_metal.sh` instead. |
 | Preflight: `python stack is installed but broken` | Read the module it names. Rerunning the setup repairs most cases. |
