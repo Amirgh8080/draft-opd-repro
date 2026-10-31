@@ -20,6 +20,9 @@ Pick the path that matches your machine:
   environment, and leaves the NVIDIA driver and the system Python alone.
   Start at [C1](#c1-check-the-gpu-driver-and-disk).
 
+**Linux machine with an H200, no Docker?** [`GUIDE_LINUX.md`](GUIDE_LINUX.md)
+is a single linear walkthrough of Path C, from SSH login to cleanup.
+
 **On Windows?** Read [`GUIDE_WINDOWS.md`](GUIDE_WINDOWS.md) first. It covers
 controlling a Linux H200 from Windows over SSH, and running under WSL2 when
 the GPU is in a Windows machine.

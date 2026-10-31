@@ -52,6 +52,11 @@ WS="$(cd "$WS" && pwd)"
 log "workspace $WS ($(df -BG --output=avail "$WS" | tail -1 | tr -d ' ') free)"
 
 # --------------------------------------------------------- system packages --
+confirm() {   # confirm <question>; true unless the user answers no
+  (( ASSUME_YES )) || [[ ! -t 0 ]] && return 0
+  local r; read -r -p "  $1 [Y/n] " r
+  [[ ! "$r" =~ ^[Nn] ]]
+}
 apt_install() {
   if ! command -v apt-get >/dev/null; then
     echo "  not an apt system; install these yourself: $*"; return 0
@@ -59,10 +64,7 @@ apt_install() {
   local missing=() p
   for p in "$@"; do dpkg -s "$p" >/dev/null 2>&1 || missing+=("$p"); done
   (( ${#missing[@]} )) || return 0
-  if (( ! ASSUME_YES )) && [[ -t 0 ]]; then
-    read -r -p "  apt-get install ${missing[*]} ? [Y/n] " r
-    [[ "$r" =~ ^[Nn] ]] && { echo "  skipped"; return 0; }
-  fi
+  confirm "sudo apt-get install ${missing[*]} ?" || { echo "  skipped"; return 0; }
   $SUDO apt-get update -qq
   DEBIAN_FRONTEND=noninteractive $SUDO apt-get install -y -qq "${missing[@]}"
 }
@@ -78,7 +80,9 @@ for cand in "${CUDA_HOME:-}" /usr/local/cuda-12.8 /usr/local/cuda /usr/local/cud
   [[ -n "$cand" && -x "$cand/bin/nvcc" && "$(nvcc_major "$cand/bin/nvcc")" == 12 ]] && { CUDA_HOME_SEL="$cand"; break; }
 done
 if [[ -z "$CUDA_HOME_SEL" ]]; then
-  log "installing CUDA toolkit 12.8 (nvcc for flash-attn; ~6 GB, no driver)"
+  log "no CUDA 12 toolkit found; flash-attn needs nvcc to compile"
+  confirm "sudo apt-get install cuda-toolkit-12-8 from NVIDIA's repository (~6 GB, no driver) ?" \
+    || die "a CUDA 12 toolkit is required. Install one, then rerun with CUDA_HOME=/path/to/cuda-12.x"
   command -v apt-get >/dev/null || die "no CUDA 12 nvcc and not an apt system: install CUDA toolkit 12.8 manually, then rerun with CUDA_HOME=/path/to/cuda-12.8"
   # shellcheck disable=SC1091
   . /etc/os-release
