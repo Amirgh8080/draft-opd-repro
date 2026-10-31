@@ -12,6 +12,10 @@ At the end you have:
 - **Phase 2:** a drafter you trained yourself with the paper's recipe, evaluated
   the same way. This takes days to weeks; Step 7 measures the real figure.
 
+**Fresh Ubuntu install with no NVIDIA driver yet?** Do
+[`INSTALL_UBUNTU.md`](INSTALL_UBUNTU.md) first. It installs the driver, sets up
+the disk and runs the setup, then sends you back here at Step 5.
+
 Commands in this guide run **on the Linux machine**, in your SSH session. The
 guide uses `/data/workspace` as the workspace path; replace it everywhere if
 you choose another.
@@ -59,8 +63,8 @@ You should see one **H200** and a **Driver Version** of 550 or higher.
 
 - **`command not found`, or `couldn't communicate with the NVIDIA driver`:**
   the driver is missing or not loaded. On a cloud VM, use the provider's GPU
-  image or driver instructions. On your own Ubuntu machine, run
-  `sudo ubuntu-drivers install`, then `sudo reboot`. If the driver is installed
+  image or driver instructions. On your own Ubuntu machine, follow
+  [`INSTALL_UBUNTU.md`](INSTALL_UBUNTU.md) Part 3. If the driver is installed
   but will not load, check `mokutil --sb-state`: Secure Boot can block the
   driver until its key is enrolled.
 - **Another process is using the GPU:** the Processes table in `nvidia-smi`
