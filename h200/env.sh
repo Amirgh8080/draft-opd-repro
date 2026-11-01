@@ -38,6 +38,11 @@ export SETUPTOOLS_SCM_PRETEND_VERSION_FOR_SGLANG=${SETUPTOOLS_SCM_PRETEND_VERSIO
 # The upstream bench sets this too; harmless once the jit cache matches 0.6.4.
 export FLASHINFER_DISABLE_VERSION_CHECK=${FLASHINFER_DISABLE_VERSION_CHECK:-1}
 
+# Ray reports cluster usage to usage-stats.ray.io unless told not to (its
+# docstring says off by default; usage_lib.py returns ENABLED_BY_DEFAULT).
+# Runs should need no network once assets are cached.
+export RAY_USAGE_STATS_ENABLED=${RAY_USAGE_STATS_ENABLED:-0}
+
 # Hub ids. Paper Table 1, Qwen3-4B row.
 TARGET_ID=${TARGET_ID:-Qwen/Qwen3-4B}
 DFLASH_ID=${DFLASH_ID:-z-lab/Qwen3-4B-DFlash-b16}

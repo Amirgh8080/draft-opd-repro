@@ -6,6 +6,9 @@ driver, the disk, the CUDA toolkit, Python and every package, all installed and
 checked. After that, [`GUIDE_LINUX.md`](GUIDE_LINUX.md) takes over from its
 Step 5.
 
+If the machine sits behind a firewall or proxy, allow the domains in
+[`NETWORK.md`](NETWORK.md) first.
+
 Work through it top to bottom. Each part ends with a check; don't continue
 until it passes. All commands run on the H200 machine, in a terminal or over
 SSH.

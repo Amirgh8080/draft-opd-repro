@@ -32,7 +32,7 @@ you choose another.
 | NVIDIA driver | already installed, version ≥ 550 (570+ recommended). The setup never changes the driver. |
 | Disk | **500 GB+** free on one filesystem, for the Python environment, models, checkpoints and logs |
 | RAM / CPU | 120 GB+ / 16+ cores |
-| Network | outbound HTTPS to PyPI, Hugging Face, GitHub, `developer.download.nvidia.com` and `astral.sh` |
+| Network | outbound HTTPS to PyPI, Hugging Face, GitHub, `developer.download.nvidia.com` and `astral.sh`. The full list is in [`NETWORK.md`](NETWORK.md). |
 
 No Hugging Face account or token is needed: every model and dataset used is
 public.

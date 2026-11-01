@@ -220,6 +220,7 @@ Upstream's README says `TEACHER_GPU_MEMORY_UTILIZATION` defaults to 0.1. The
 | File | Purpose |
 |---|---|
 | `GUIDE.md` | Step-by-step walkthrough on a fresh machine |
+| `NETWORK.md` | Every domain contacted, by stage, with a minimal firewall allowlist |
 | `INSTALL_UBUNTU.md` | Fresh Ubuntu → ready: NVIDIA driver, Fabric Manager (HGX), pinning, disk, setup |
 | `GUIDE_LINUX.md` | Linear walkthrough for a Linux H200 machine without Docker |
 | `GUIDE_WINDOWS.md` | Windows: SSH control of a Linux H200, or WSL2 on a Windows GPU host |
