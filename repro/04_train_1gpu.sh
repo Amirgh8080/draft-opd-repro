@@ -8,7 +8,7 @@
 #   model already inside the student module. requires_external_teacher() then
 #   returns False and main_ppo.py:180 never allocates a teacher GPU pool.
 #   Combined with rollout.free_cache_engine=True (the SGLang engine releases its
-#   weights/KV during each training step), everything fits on one device.
+#   weights/KV during each training step), the trainer can run on one device.
 #
 # SCALE presets -- pick with SCALE=...
 #   probe    64 prompts,  1 epoch,  512 tok   ~30 min   "does it run + not OOM"
@@ -37,6 +37,21 @@ N_PROMPTS=${N_PROMPTS_OVERRIDE:-$N_PROMPTS}
 EPOCHS=${EPOCHS_OVERRIDE:-$EPOCHS}
 RESP_LEN=${RESP_LEN_OVERRIDE:-$RESP_LEN}
 ANCHOR_STRIDE=${ANCHOR_STRIDE_OVERRIDE:-$ANCHOR_STRIDE}
+ROLLOUT_KV_CACHE_DTYPE=${ROLLOUT_KV_CACHE_DTYPE:-auto}
+case "$ROLLOUT_KV_CACHE_DTYPE" in
+  auto|bf16|fp8_e4m3) ;;
+  *) echo "ERROR: ROLLOUT_KV_CACHE_DTYPE must be auto, bf16, or fp8_e4m3." >&2; exit 1 ;;
+esac
+
+if [[ "$SCALE" == "probe" ]]; then
+  VAL_BEFORE_TRAIN=${VAL_BEFORE_TRAIN:-False}
+  ROLLOUT_ENFORCE_EAGER=${ROLLOUT_ENFORCE_EAGER:-True}
+  SAVE_FREQ=${SAVE_FREQ:-1}
+else
+  VAL_BEFORE_TRAIN=${VAL_BEFORE_TRAIN:-True}
+  ROLLOUT_ENFORCE_EAGER=${ROLLOUT_ENFORCE_EAGER:-False}
+  SAVE_FREQ=${SAVE_FREQ:-100}
+fi
 
 # ---------------------------------------------------------------- preflight --
 [[ -f "$FULL_TRAIN_JSONL" ]] || { echo "ERROR: missing $FULL_TRAIN_JSONL" >&2; exit 1; }
@@ -115,7 +130,9 @@ cat <<INFO
    draft  (trained)   : $DRAFT_MODEL_PATH
    teacher            : composed_main (no separate teacher GPU)
    anchor stride      : $ANCHOR_STRIDE  (1 = every draft block, as in the paper)
-   model dtype        : $MODEL_DTYPE  (paper used fp32 on H200; bf16 required here)
+   model init dtype   : $MODEL_DTYPE
+   rollout backend    : flashinfer (eager=$ROLLOUT_ENFORCE_EAGER)
+   rollout KV dtype   : $ROLLOUT_KV_CACHE_DTYPE
    checkpoints        : verl/checkpoints/verl-dflash-opd/
 ================================================================================
 
@@ -185,11 +202,12 @@ MAX_PROMPT=512 \
 MAX_RESPONSE_LENGTH="$RESP_LEN" \
 ENABLE_THINKING=${ENABLE_THINKING:-False} \
 TEACHER_GPU_MEMORY_UTILIZATION=${TEACHER_GPU_MEMORY_UTILIZATION:-0.35} \
-REJECTED_DRAFT_POSITION_DECAY=0.8 \
+REJECTED_DRAFT_POSITION_DECAY=${REJECTED_DRAFT_POSITION_DECAY:-0.8} \
 TEST_FREQ=${TEST_FREQ:-50} \
-SAVE_FREQ=${SAVE_FREQ:-100} \
+SAVE_FREQ="$SAVE_FREQ" \
 SAVE_START_STEP=${SAVE_START_STEP:-0} \
-EXP_NAME=${EXP_NAME:-"3090-${SCALE}"} \
+VAL_BEFORE_TRAIN="$VAL_BEFORE_TRAIN" \
+EXP_NAME=${EXP_NAME:-"3090-${SCALE}-kv-${ROLLOUT_KV_CACHE_DTYPE}"} \
 bash verl/examples/on_policy_distillation_trainer/run_qwen_gsm8k_forward-ins.sh \
   "data.val_files=$VAL_FILES" \
   actor_rollout_ref.model.enable_gradient_checkpointing=True \
@@ -200,4 +218,8 @@ bash verl/examples/on_policy_distillation_trainer/run_qwen_gsm8k_forward-ins.sh 
   ++actor_rollout_ref.model.override_config.attn_implementation="$attn_impl" \
   actor_rollout_ref.model.use_remove_padding="$remove_padding" \
   actor_rollout_ref.actor.fsdp_config.model_dtype="$MODEL_DTYPE" \
+  ++actor_rollout_ref.rollout.engine_kwargs.sglang.attention_backend=flashinfer \
+  ++actor_rollout_ref.rollout.engine_kwargs.sglang.kv_cache_dtype="$ROLLOUT_KV_CACHE_DTYPE" \
+  actor_rollout_ref.rollout.enforce_eager="$ROLLOUT_ENFORCE_EAGER" \
+  actor_rollout_ref.rollout.max_num_seqs=${ROLLOUT_MAX_NUM_SEQS:-4} \
   "$@"

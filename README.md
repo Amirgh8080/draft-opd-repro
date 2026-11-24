@@ -33,6 +33,9 @@ order, and the full list of known friction points.
 
 ## Setup
 
+See the [RTX 3090 guide](repro/RTX3090.md) for the pinned upstream checkout,
+isolated environment, data downloads, and paper benchmark commands.
+
 ```bash
 git clone https://github.com/Simplified-Reasoning/Draft-OPD.git
 cd Draft-OPD
@@ -40,6 +43,7 @@ cd Draft-OPD
 git clone https://github.com/Amirgh8080/draft-opd-repro.git /tmp/repro
 cp -r /tmp/repro/repro .
 git apply /tmp/repro/patches/001-launcher-fixes.patch
+git apply /tmp/repro/patches/002-offline-gsm8k.patch
 
 bash repro/10_bootstrap_and_run.sh --scale probe -y --with-smoke
 ```
@@ -103,10 +107,10 @@ Eight ways the stack installs *successfully* but wrong:
 
 Judge replication on **acceptance length τ**, not on speedup ratios.
 
-τ is the mean number of draft tokens accepted per verification round — a
-property of the draft/target pair, the prompts, and the temperature. It is
-hardware-independent, so the paper's Qwen3-4B result (DFlash τ = 6.04 →
-Draft-OPD τ = 6.60, non-thinking, temperature 0) is exactly reproducible here.
+τ is the mean acceptance length per verification round. Use the paper's
+Qwen3-4B result (DFlash τ = 6.04 → Draft-OPD τ = 6.60, non-thinking,
+temperature 0) as a reference. Checkpoint, prompt, and numerical differences
+can change the measured values.
 
 The speedup multipliers are not. They depend on the memory-bandwidth-to-compute
 ratio (3090 ≈ 936 GB/s, 4090 ≈ 1008 GB/s, vs H200 ≈ 4.8 TB/s), so absolute ×

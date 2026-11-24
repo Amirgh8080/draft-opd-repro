@@ -30,6 +30,9 @@ export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
 TARGET=${TARGET:-Qwen/Qwen3-4B}
 MODE=${MODE:-nothinking}          # nothinking | thinking
 TEMP=${TEMP:-0.0}
+CONCURRENCIES=${CONCURRENCIES:-1}
+MAX_RUNNING_REQUESTS=${MAX_RUNNING_REQUESTS:-1}
+MEM_FRACTION_STATIC=${MEM_FRACTION_STATIC:-0.80}
 LOG_DIR=${LOG_DIR:-"$REPO_ROOT/repro/eval/logs"}
 mkdir -p "$LOG_DIR"
 
@@ -64,12 +67,12 @@ run_one () {
     ${extra_flags} \
     --speculative-algorithm DFLASH \
     --dataset-name ${DATASETS} \
-    --concurrencies 1 \
+    --concurrencies "$CONCURRENCIES" \
     --attention-backends flashinfer \
     --max-new-tokens "$MAX_NEW" \
     --temp "$TEMP" \
-    --mem-fraction-static 0.80 \
-    --max-running-requests 1 \
+    --mem-fraction-static "$MEM_FRACTION_STATIC" \
+    --max-running-requests "$MAX_RUNNING_REQUESTS" \
     --tp-size 1 \
     --dtype bfloat16 \
     "${THINK_FLAG[@]}" \

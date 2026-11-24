@@ -1,0 +1,10 @@
+--- a/diffusion/dflash/model/utils.py
++++ b/diffusion/dflash/model/utils.py
+@@ -39,6 +39,6 @@
+ def load_and_process_dataset(data_name: str):
+     # Math datasets
+     if data_name == "gsm8k":
+-        dataset = load_dataset("gsm8k", "main", split="test") # 1.3k左右数据
++        dataset = load_dataset("openai/gsm8k", "main", split="test")
+         prompt_fmt = "{question}\nPlease reason step by step, and put your final answer within \\boxed{{}}."
+         dataset = dataset.map(lambda x: {"turns": [prompt_fmt.format(**x)]})

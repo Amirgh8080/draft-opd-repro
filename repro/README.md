@@ -2,6 +2,9 @@
 
 Single-GPU (24 GB, SM86) Ubuntu setup for arXiv 2605.29343.
 
+Follow the [RTX 3090 step-by-step guide](RTX3090.md) to install the pinned
+stack and run benchmarks. It uses the bootstrap's setup-only mode.
+
 ## Quick start
 
 One command: builds the env, verifies it, fetches assets, generates validation
@@ -21,7 +24,7 @@ rm repro/.state/verify.done && bash repro/10_bootstrap_and_run.sh # recheck env
 ```
 
 Flags: `--scale probe|reduced|paper`, `--env-name`, `--skip-install`,
-`--train-only`, `--with-smoke`, `--with-flash-attn`, `-y`.
+`--setup-only`, `--train-only`, `--with-smoke`, `--with-flash-attn`, `-y`.
 
 ## Manual, step by step
 
@@ -73,9 +76,8 @@ Target row, paper Table 1, **thinking disabled, temperature 0, Qwen3-4B**:
 | Draft-OPD | 6.22× | 7.22× | 6.39× | 5.40× | 5.65× | 3.18× | 3.09× | 5.31× | **6.60** |
 
 **Judge your replication on τ, not on the speedups.** Acceptance length τ is the
-mean number of draft tokens accepted per verification round — a property of the
-draft/target pair, the prompts, and the temperature. It is *hardware-independent*,
-so 6.04 → 6.60 is exactly reproducible on a 3090.
+mean acceptance length per verification round. Use 6.04 → 6.60 as a paper
+reference and record the checkpoint, prompts, precision and backend used.
 
 The speedup multipliers are not. They depend on the memory-bandwidth-to-compute
 ratio (3090 ≈ 936 GB/s vs H200 ≈ 4.8 TB/s), so your absolute × values will

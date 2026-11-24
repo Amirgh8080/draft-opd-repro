@@ -4,6 +4,7 @@
 #
 #   bash repro/10_bootstrap_and_run.sh                    # probe scale
 #   bash repro/10_bootstrap_and_run.sh --scale reduced
+#   bash repro/10_bootstrap_and_run.sh --setup-only       # install and cache assets
 #   bash repro/10_bootstrap_and_run.sh --skip-install     # env already built
 #   bash repro/10_bootstrap_and_run.sh --train-only       # rerun training only
 #
@@ -26,6 +27,7 @@ WITH_FLASH_ATTN=0
 WITH_SMOKE=0
 ASSUME_YES=0
 TRAIN_ONLY=0
+SETUP_ONLY=0
 
 # The fork is SGLang 0.5.8 (its CI release branches, the sgl-kernel 0.3.21
 # pairing, and verl's own `sglang==0.5.8` extra all agree).
@@ -47,11 +49,17 @@ while [[ $# -gt 0 ]]; do
     --with-flash-attn)  WITH_FLASH_ATTN=1; shift ;;
     --with-smoke)       WITH_SMOKE=1; shift ;;
     --train-only)       TRAIN_ONLY=1; SKIP_INSTALL=1; shift ;;
+    --setup-only)       SETUP_ONLY=1; shift ;;
     -y|--yes)           ASSUME_YES=1; shift ;;
     -h|--help)          sed -n '2,12p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) echo "unknown option: $1" >&2; exit 1 ;;
   esac
 done
+
+if (( SETUP_ONLY && TRAIN_ONLY )); then
+  echo "ERROR: --setup-only and --train-only cannot be combined." >&2
+  exit 1
+fi
 
 mkdir -p "$STATE_DIR" "$LOG_DIR"
 RUN_LOG="$LOG_DIR/bootstrap_$(date +%Y%m%d_%H%M%S).log"
@@ -491,6 +499,11 @@ main() {
     stage prefetch prefetch
     stage make_val make_val
     smoke
+  fi
+
+  if (( SETUP_ONLY == 1 )); then
+    log "Setup finished. Activate '$ENV_NAME' to run repro/03_eval_table1.sh."
+    return
   fi
 
   train   # deliberately not stage-gated: always re-runnable
